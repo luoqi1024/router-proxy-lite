@@ -1,0 +1,12 @@
+.local/
+.playwright-cli/
+dist/
+output/
+node_modules/
+*.exe
+*.test
+*.log
+state.json
+admin.key
+config.runtime.json
+*.private.*

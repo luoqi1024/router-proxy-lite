@@ -1,0 +1,37 @@
+param(
+    [ValidateSet('armv7','check-windows')][string]$Target='armv7',
+    [string]$ModuleCache=''
+)
+$ErrorActionPreference='Stop'
+$root=(Resolve-Path "$PSScriptRoot/..").Path
+$archive="$root/.local/tools/sing-box-source.tar.gz"
+$source="$root/.local/tools/sing-box-1.14.2"
+$go="$root/.local/tools/go/bin/go.exe"
+$upx="$root/.local/tools/upx-5.2.1-win64/upx.exe"
+if(!(Test-Path $archive)){
+    New-Item -ItemType Directory -Force "$root/.local/tools" | Out-Null
+    Invoke-WebRequest 'https://github.com/SagerNet/sing-box/archive/refs/tags/v1.14.2.tar.gz' -OutFile $archive
+}
+if((Get-FileHash $archive).Hash -ne '67DD8F8C37ECAAADCFCAFAD1F0827EED4B034C963B86FD3AA5C0D7A36876845D'){throw 'Source archive hash mismatch'}
+& tar -xf $archive -C "$root/.local/tools"
+if($LASTEXITCODE -ne 0){throw 'Source extraction failed'}
+& python "$PSScriptRoot/core-profile.py" $source
+if($LASTEXITCODE -ne 0){throw 'Core profile failed'}
+$env:CGO_ENABLED='0';$env:GOOS='linux';$env:GOARCH='arm';$env:GOARM='7'
+$env:GOPATH="$root/.local/gopath";$env:GOCACHE="$root/.local/gocache"
+if($ModuleCache){$env:GOMODCACHE=$ModuleCache}
+$filename='routerlite-core-armv7'
+if($Target -eq 'check-windows'){$env:GOOS='windows';$env:GOARCH='amd64';$filename='routerlite-core-check.exe'}
+Push-Location $source
+try{
+    New-Item -ItemType Directory -Force "$root/dist" | Out-Null
+    & $go build -trimpath -tags with_utls '-ldflags=-s -w -X github.com/sagernet/sing-box/constant.Version=1.14.2-routerlite' -o "$root/dist/$filename" ./cmd/sing-box
+    if($LASTEXITCODE -ne 0){throw 'Core build failed'}
+    if($Target -eq 'armv7'){
+        Copy-Item "$root/dist/$filename" "$root/dist/$filename.raw"
+        & $upx --best --lzma "$root/dist/$filename"
+        if($LASTEXITCODE -ne 0){throw 'Compression failed'}
+        & $upx -t "$root/dist/$filename"
+        if($LASTEXITCODE -ne 0){throw 'Integrity check failed'}
+    }
+}finally{Pop-Location}

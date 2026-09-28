@@ -1,0 +1,61 @@
+'use strict';
+const $ = (id) => document.getElementById(id);
+let state = null, currentPage = 'overview', working = false, toastTimer;
+async function api(path, body, method) {
+ const options = {method: method || (body === undefined ? 'GET' : 'POST'), headers:{}, credentials:'same-origin'};
+ if (body !== undefined) { options.headers['Content-Type']='application/json'; options.body=JSON.stringify(body); }
+ const response=await fetch('/api/'+path,options);
+ const result=await response.json();
+ if (!response.ok) { if(response.status===401 && path!=='session') showLogin(); throw new Error(result.error || '请求失败'); }
+ return result;
+}
+function message(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{$('toast').hidden=true;},3200);}
+function showLogin(){$('app').hidden=true;$('login').hidden=false;state=null;}
+function error(text){$('error-banner').textContent=text;$('error-banner').hidden=!text;}
+function busy(value){working=value;document.body.classList.toggle('busy',value);document.querySelectorAll('#app button:not(.nav-item), #import-form button, #app input').forEach(b=>b.disabled=value);}
+async function perform(action,success){if(working)return;busy(true);error('');try{const data=await action();if(data&&data.nodes){state=data;render();}if(success)message(success);}catch(e){error(e.message);}finally{busy(false);}}
+function showPage(page){currentPage=page;for(const p of ['overview','nodes','device'])$('page-'+p).hidden=p!==page;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('breadcrumb').textContent='工作空间 / '+({overview:'网络概览',nodes:'节点与订阅',device:'设备与记录'}[page]);}
+function date(value){if(!value||value.startsWith('0001-'))return '尚未更新';return new Date(value).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
+function render(){
+ if(!state)return;
+ $('login').hidden=true;$('app').hidden=false;$('version').textContent='v'+state.version;
+ const demo=state.mode==='demo';$('demo-banner').hidden=!demo;$('demo-import').hidden=!demo;
+ const chosen=state.nodes.find(n=>n.id===state.selected);
+ $('selected-node').textContent=chosen?chosen.name:'还没有选择节点';$('node-protocol').textContent=chosen?chosen.type:'未选择';
+ $('node-detail').textContent=chosen?(demo?'示例节点 · 仅用于交互演示':'使用此节点作为代理出口'):'导入订阅，找到你的第一个出口。';
+ const direct=state.policy==='direct';const active=state.enabled&&state.running&&!direct;
+ $('status-card').classList.toggle('on',active);$('status-title').textContent=active?'代理已开启':direct?'全部直连':state.enabled?'代理未就绪':'代理已关闭';
+ $('status-pill').textContent=active?(demo?'模拟运行':'运行中'):'普通上网';
+ $('status-detail').textContent=active?(demo?'模拟连接已开启，实际网络保持不变。':'新连接将按所选策略转发。'):direct?'所有连接使用普通上网路径。':state.enabled?'内核没有运行，请检查设备与记录。':'准备好节点后，一键开启。';
+ $('toggle-proxy').textContent=state.enabled?'关闭代理 →':'开启代理 ↗';
+ document.querySelectorAll('[data-policy]').forEach(b=>{b.classList.toggle('selected',b.dataset.policy===state.policy);b.setAttribute('aria-pressed',String(b.dataset.policy===state.policy));});
+ $('subscription-name').textContent=state.subscriptionName||'还没有订阅';$('subscription-updated').textContent=state.subscriptionName?'更新于 '+date(state.updatedAt)+' · '+state.nodes.length+' 个节点':'支持 Clash / Mihomo 格式';
+ $('node-count').textContent=String(state.nodes.length);$('warnings').textContent=(state.warnings||[]).join('\n');$('warnings').hidden=!(state.warnings||[]).length;
+ renderNodes();
+ $('device-description').textContent=demo?'电脑演示 · '+state.device.architecture:'系统架构 '+state.device.architecture+' · 首版仅支持 IPv4';
+ $('device-checks').replaceChildren();for(const check of state.device.checks||[]){const row=document.createElement('div');row.className='check'+(check.ok?'':' bad');const icon=document.createElement('span');icon.textContent=check.ok?'✓':'!';const content=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('p');title.textContent=check.name;detail.textContent=check.detail;content.append(title,detail);row.append(icon,content);$('device-checks').append(row);}
+ $('events').replaceChildren();for(const event of [...(state.events||[])].reverse()){const li=document.createElement('li'),time=document.createElement('time'),text=document.createElement('span');time.textContent=date(event.time);text.textContent=event.message;li.append(time,text);$('events').append(li);}
+ showPage(currentPage);
+}
+function renderNodes(){
+ if(!state)return;const search=$('node-search').value.trim().toLowerCase();$('node-list').replaceChildren();$('empty-nodes').hidden=!!state.nodes.length;
+ for(const node of state.nodes.filter(n=>(n.name+' '+n.type).toLowerCase().includes(search))){
+  const button=document.createElement('button');button.className='node'+(node.id===state.selected?' selected':'');button.setAttribute('aria-pressed',String(node.id===state.selected));
+  const globe=document.createElement('span');globe.className='node-globe';globe.textContent='◎';const details=document.createElement('div'),name=document.createElement('strong'),protocol=document.createElement('small'),dot=document.createElement('span');name.textContent=node.name;protocol.textContent=node.type+(node.id===state.selected?' · 当前选择':'');details.append(name,protocol);dot.className='radio-dot';button.append(globe,details,dot);button.addEventListener('click',()=>perform(()=>api('settings',{selected:node.id}),'节点已选择'));$('node-list').append(button);
+ }
+ if(state.nodes.length&&!$('node-list').children.length){const p=document.createElement('p');p.className='muted';p.textContent='没有匹配的节点';$('node-list').append(p);}
+}
+$('login-form').addEventListener('submit',async event=>{event.preventDefault();$('login-error').textContent='';const button=event.submitter;button.disabled=true;try{state=await api('session',{key:$('login-key').value});$('login-key').value='';render();}catch(e){$('login-error').textContent=e.message;}finally{button.disabled=false;}});
+document.querySelectorAll('[data-page]').forEach(button=>button.addEventListener('click',()=>showPage(button.dataset.page)));
+document.querySelectorAll('[data-policy]').forEach(button=>button.addEventListener('click',()=>perform(()=>api('settings',{policy:button.dataset.policy}),'策略已保存')));
+$('go-nodes').addEventListener('click',()=>showPage('nodes'));
+$('toggle-proxy').addEventListener('click',()=>{if(!state.selected&&!state.enabled&&state.policy!=='direct'){showPage('nodes');message('先导入订阅并选择节点');return;}perform(()=>api('settings',{enabled:!state.enabled}),state.enabled?'已恢复普通上网':'设置已保存');});
+$('refresh-state').addEventListener('click',()=>perform(()=>api('state'),'状态已刷新'));
+$('logout').addEventListener('click',async()=>{try{await api('session',undefined,'DELETE');showLogin();}catch(e){error(e.message);}});
+$('node-search').addEventListener('input',renderNodes);
+$('demo-import').addEventListener('click',()=>perform(()=>api('subscription',{url:'demo://starter',name:'示例订阅'}),'已载入示例节点'));
+$('open-import').addEventListener('click',()=>{$('import-error').textContent='';$('import-dialog').showModal();});
+$('close-import').addEventListener('click',()=>$('import-dialog').close());
+$('import-form').addEventListener('submit',async event=>{event.preventDefault();if(working)return;const url=$('sub-url').value.trim(),content=$('sub-content').value.trim();if(!url&&!content){$('import-error').textContent='请填写订阅链接或配置内容';return;}if(url&&content){$('import-error').textContent='链接和配置内容只需填写其中一种';return;}busy(true);$('import-error').textContent='';try{state=await api('subscription',{url,name:$('sub-name').value.trim(),content});$('sub-url').value='';$('sub-content').value='';$('import-dialog').close();render();message('订阅已导入');}catch(e){$('import-error').textContent=e.message;}finally{busy(false);}});
+$('update-subscription').addEventListener('click',()=>perform(()=>api('subscription/refresh',{}),'订阅已更新'));
+api('state').then(data=>{state=data;render();}).catch(()=>showLogin());
