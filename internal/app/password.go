@@ -10,6 +10,8 @@ import (
 	"unicode/utf8"
 )
 
+const MinPasswordLength = 9
+
 // The authenticated session is the authorization to change the password.
 // Handler holds s.mu, serializing rotation with login and other management calls.
 func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
@@ -22,8 +24,8 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	length := utf8.RuneCountInString(body.Password)
-	if length < 12 || length > 128 || strings.TrimSpace(body.Password) != body.Password || strings.IndexFunc(body.Password, unicode.IsControl) >= 0 {
-		fail(w, 400, "新密码需为 12–128 个字符，不能以空白开头或结尾，也不能包含控制字符")
+	if length < MinPasswordLength || length > 128 || strings.TrimSpace(body.Password) != body.Password || strings.IndexFunc(body.Password, unicode.IsControl) >= 0 {
+		fail(w, 400, "新密码需为 9–128 个字符，不能以空白开头或结尾，也不能包含控制字符")
 		return
 	}
 	if body.Password != body.Confirm {

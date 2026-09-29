@@ -23,7 +23,7 @@ func TestPasswordRotationPersistsAndRevokesAllSessions(t *testing.T) {
 	before, _ := json.Marshal(h.s.state)
 	calls := h.driver.calls
 	second := h.request("POST", "/api/session", `{"key":"routerlite-demo"}`, false).Result().Cookies()[0]
-	password := "test-only-new-password"
+	password := "test-only" // Exactly nine characters must also work after restart.
 	w := h.request("POST", "/api/password", passwordBody(password, password), true)
 	if w.Code != 200 || strings.Contains(w.Body.String(), password) {
 		t.Fatal("rotation failed or leaked credential")
@@ -80,6 +80,7 @@ func TestPasswordAuthorizationValidationAndWriteFailure(t *testing.T) {
 	}
 	for _, pair := range [][2]string{
 		{"short", "short"},
+		{"12345678", "12345678"},
 		{strings.Repeat("x", 129), strings.Repeat("x", 129)},
 		{"test-only-password", "different-password"},
 		{" test-only-password", " test-only-password"},

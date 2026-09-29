@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 //go:embed web/*
@@ -81,7 +82,7 @@ func NewServer(dir, mode string, driver Driver, device Device) (*Server, string,
 	} else if err != nil {
 		return nil, "", err
 	}
-	if len(key) < 12 {
+	if utf8.RuneCountInString(string(key)) < MinPasswordLength {
 		return nil, "", errors.New("admin key is too short")
 	}
 	if mode == "router" && string(key) == "routerlite-demo" {
