@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 )
 
@@ -34,6 +35,39 @@ func RenderConfig(s State, d Device, assets string) ([]byte, error) {
 		},
 		"outbounds": []any{n.Outbound, map[string]any{"type": "direct", "tag": "direct"}},
 		"route":     map[string]any{"default_domain_resolver": map[string]any{"server": "local-dns", "strategy": "ipv4_only"}, "default_interface": d.WAN, "rules": rules, "rule_set": sets, "final": "proxy"},
+	}
+	if s.Failover.Enabled {
+		outbounds := config["outbounds"].([]any)
+		inbounds := config["inbounds"].([]any)
+		probeRules := []any{}
+		addProbe := func(index int, outbound string) {
+			tag := fmt.Sprintf("probe-%d", index)
+			inbounds = append(inbounds, map[string]any{"type": "mixed", "tag": tag, "listen": "127.0.0.1", "listen_port": probePort + index})
+			probeRules = append(probeRules, map[string]any{"inbound": []string{tag}, "action": "route", "outbound": outbound})
+		}
+		addProbe(0, "proxy")
+		for i, id := range s.Failover.Nodes {
+			tag := "proxy"
+			if id != s.Selected {
+				for _, candidate := range s.Subscription.Nodes {
+					if candidate.ID != id {
+						continue
+					}
+					tag = fmt.Sprintf("backup-%d", i)
+					outbound := make(map[string]any, len(candidate.Outbound))
+					for k, v := range candidate.Outbound {
+						outbound[k] = v
+					}
+					outbound["tag"] = tag
+					outbounds = append(outbounds, outbound)
+					break
+				}
+			}
+			addProbe(i+1, tag)
+		}
+		config["outbounds"] = outbounds
+		config["inbounds"] = inbounds
+		config["route"].(map[string]any)["rules"] = append(probeRules, rules...)
 	}
 	return json.MarshalIndent(config, "", "  ")
 }

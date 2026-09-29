@@ -26,11 +26,12 @@ type Subscription struct {
 	Warnings  []string  `json:"warnings,omitempty"`
 }
 type State struct {
-	Schema       int          `json:"schema"`
-	Enabled      bool         `json:"enabled"`
-	Policy       string       `json:"policy"`
-	Selected     string       `json:"selected"`
-	Subscription Subscription `json:"subscription"`
+	Schema       int            `json:"schema"`
+	Enabled      bool           `json:"enabled"`
+	Policy       string         `json:"policy"`
+	Selected     string         `json:"selected"`
+	Subscription Subscription   `json:"subscription"`
+	Failover     FailoverConfig `json:"failover"`
 }
 type Event struct {
 	Time    time.Time `json:"time"`
@@ -55,18 +56,20 @@ type PublicNode struct {
 	Type string `json:"type"`
 }
 type View struct {
-	Version          string       `json:"version"`
-	Mode             string       `json:"mode"`
-	Enabled          bool         `json:"enabled"`
-	Running          bool         `json:"running"`
-	Policy           string       `json:"policy"`
-	Selected         string       `json:"selected"`
-	Nodes            []PublicNode `json:"nodes"`
-	SubscriptionName string       `json:"subscriptionName"`
-	UpdatedAt        time.Time    `json:"updatedAt"`
-	Warnings         []string     `json:"warnings"`
-	Events           []Event      `json:"events"`
-	Device           Device       `json:"device"`
+	Version          string         `json:"version"`
+	Mode             string         `json:"mode"`
+	Enabled          bool           `json:"enabled"`
+	Running          bool           `json:"running"`
+	Policy           string         `json:"policy"`
+	Selected         string         `json:"selected"`
+	Nodes            []PublicNode   `json:"nodes"`
+	SubscriptionName string         `json:"subscriptionName"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
+	Warnings         []string       `json:"warnings"`
+	Events           []Event        `json:"events"`
+	Device           Device         `json:"device"`
+	Failover         FailoverConfig `json:"failover"`
+	Health           HealthStatus   `json:"health"`
 }
 
 func DefaultState() State {
@@ -81,6 +84,9 @@ func (s State) Node() (Node, error) {
 	return Node{}, errors.New("请先选择一个可用节点")
 }
 func (s State) Validate() error {
+	if err := s.validateFailover(); err != nil {
+		return err
+	}
 	if s.Policy != "rule" && s.Policy != "global" && s.Policy != "direct" {
 		return errors.New("未知策略")
 	}

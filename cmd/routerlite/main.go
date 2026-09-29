@@ -89,6 +89,7 @@ func main() {
 		log.Print("Autostart did not complete; use the authenticated status page for details.")
 	}
 	cancel()
+	s.StartMonitoring()
 	server := &http.Server{Addr: *listen, Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 90 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, terminationSignal())

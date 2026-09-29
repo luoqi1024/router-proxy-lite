@@ -24,19 +24,29 @@ import (
 var webFiles embed.FS
 
 type Server struct {
-	mu           sync.Mutex
-	state        State
-	dir          string
-	mode         string
-	key          [32]byte
-	driver       Driver
-	device       Device
-	events       []Event
-	sessions     map[string]time.Time
-	failures     int
-	blockedUntil time.Time
-	Fetch        func(context.Context, string) ([]byte, error)
-	Save         func(string, State) error
+	mu            sync.Mutex
+	state         State
+	dir           string
+	mode          string
+	key           [32]byte
+	driver        Driver
+	device        Device
+	events        []Event
+	sessions      map[string]time.Time
+	failures      int
+	blockedUntil  time.Time
+	Fetch         func(context.Context, string) ([]byte, error)
+	Save          func(string, State) error
+	Probe         func(context.Context, int) error
+	revision      uint64
+	health        HealthStatus
+	nextFallback  time.Time
+	probeCancel   context.CancelFunc
+	monitorCancel context.CancelFunc
+	monitorDone   chan struct{}
+	closeOnce     sync.Once
+	closeErr      error
+	closed        bool
 }
 
 func NewServer(dir, mode string, driver Driver, device Device) (*Server, string, error) {
@@ -77,6 +87,7 @@ func NewServer(dir, mode string, driver Driver, device Device) (*Server, string,
 		return nil, "", errors.New("此目录使用公开演示口令；请为路由器选择独立的数据目录")
 	}
 	s := &Server{state: state, dir: dir, mode: mode, key: sha256.Sum256(key), driver: driver, device: device, sessions: map[string]time.Time{}, Fetch: FetchSubscription, Save: SaveState}
+	s.Probe = probeHTTPS
 	s.event("管理服务已启动")
 	return s, created, nil
 }
@@ -91,7 +102,7 @@ func (s *Server) view() View {
 	for _, n := range s.state.Subscription.Nodes {
 		nodes = append(nodes, PublicNode{n.ID, n.Name, n.Type})
 	}
-	return View{Version: Version, Mode: s.mode, Enabled: s.state.Enabled, Running: s.driver.Running(), Policy: s.state.Policy, Selected: s.state.Selected, Nodes: nodes, SubscriptionName: s.state.Subscription.Name, UpdatedAt: s.state.Subscription.UpdatedAt, Warnings: s.state.Subscription.Warnings, Events: s.events, Device: s.device}
+	return View{Version: Version, Mode: s.mode, Enabled: s.state.Enabled, Running: s.driver.Running(), Policy: s.state.Policy, Selected: s.state.Selected, Nodes: nodes, SubscriptionName: s.state.Subscription.Name, UpdatedAt: s.state.Subscription.UpdatedAt, Warnings: s.state.Subscription.Warnings, Events: s.events, Device: s.device, Failover: s.state.Failover, Health: s.healthView()}
 }
 func (s *Server) commit(ctx context.Context, next State) error {
 	if err := next.Validate(); err != nil {
@@ -111,6 +122,12 @@ func (s *Server) commit(ctx context.Context, next State) error {
 		return errors.New("保存失败，原有配置已恢复")
 	}
 	s.state = next
+	s.revision++
+	if s.probeCancel != nil {
+		s.probeCancel()
+	}
+	s.health = HealthStatus{}
+	s.nextFallback = time.Time{}
 	return nil
 }
 func (s *Server) Resume(ctx context.Context) error {
@@ -125,7 +142,22 @@ func (s *Server) Resume(ctx context.Context) error {
 	}
 	return nil
 }
-func (s *Server) Close() error { return s.driver.Close() }
+func (s *Server) Close() error {
+	s.closeOnce.Do(func() {
+		s.mu.Lock()
+		s.closed = true
+		if s.monitorCancel != nil {
+			s.monitorCancel()
+		}
+		done := s.monitorDone
+		s.mu.Unlock()
+		if done != nil {
+			<-done
+		}
+		s.closeErr = s.driver.Close()
+	})
+	return s.closeErr
+}
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -302,6 +334,7 @@ func (s *Server) importData(w http.ResponseWriter, r *http.Request, data []byte,
 		warnings = append(warnings, "请确认节点后开启代理")
 		next.Subscription.Warnings = warnings
 	}
+	next.pruneFailover()
 	if err = s.commit(r.Context(), next); err != nil {
 		fail(w, 409, err.Error())
 		return
@@ -334,9 +367,10 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Enabled  *bool   `json:"enabled"`
-		Policy   *string `json:"policy"`
-		Selected *string `json:"selected"`
+		Enabled  *bool           `json:"enabled"`
+		Policy   *string         `json:"policy"`
+		Selected *string         `json:"selected"`
+		Failover *FailoverConfig `json:"failover"`
 	}
 	if !readBody(w, r, &body) {
 		return
@@ -354,6 +388,12 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 			fail(w, 400, "节点不存在")
 			return
 		}
+	}
+	if body.Failover != nil {
+		next.Failover = *body.Failover
+	}
+	if body.Selected != nil && body.Failover == nil && !containsNode(next.Failover.Nodes, next.Selected) {
+		next.Failover.Enabled = false
 	}
 	if err := s.commit(r.Context(), next); err != nil {
 		fail(w, 409, err.Error())

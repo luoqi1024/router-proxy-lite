@@ -1,6 +1,7 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
 let state = null, currentPage = 'overview', working = false, toastTimer;
+let failoverDraft = new Set(), failoverDirty = false;
 async function api(path, body, method) {
  const options = {method: method || (body === undefined ? 'GET' : 'POST'), headers:{}, credentials:'same-origin'};
  if (body !== undefined) { options.headers['Content-Type']='application/json'; options.body=JSON.stringify(body); }
@@ -10,7 +11,7 @@ async function api(path, body, method) {
  return result;
 }
 function message(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{$('toast').hidden=true;},3200);}
-function showLogin(){$('app').hidden=true;$('login').hidden=false;state=null;}
+function showLogin(){$('app').hidden=true;$('login').hidden=false;state=null;failoverDirty=false;}
 function error(text){$('error-banner').textContent=text;$('error-banner').hidden=!text;}
 function busy(value){working=value;document.body.classList.toggle('busy',value);document.querySelectorAll('#app button:not(.nav-item), #import-form button, #app input').forEach(b=>b.disabled=value);}
 async function perform(action,success){if(working)return;busy(true);error('');try{const data=await action();if(data&&data.nodes){state=data;render();}if(success)message(success);}catch(e){error(e.message);}finally{busy(false);}}
@@ -31,17 +32,27 @@ function render(){
  document.querySelectorAll('[data-policy]').forEach(b=>{b.classList.toggle('selected',b.dataset.policy===state.policy);b.setAttribute('aria-pressed',String(b.dataset.policy===state.policy));});
  $('subscription-name').textContent=state.subscriptionName||'还没有订阅';$('subscription-updated').textContent=state.subscriptionName?'更新于 '+date(state.updatedAt)+' · '+state.nodes.length+' 个节点':'支持 Clash / Mihomo 格式';
  $('node-count').textContent=String(state.nodes.length);$('warnings').textContent=(state.warnings||[]).join('\n');$('warnings').hidden=!(state.warnings||[]).length;
+ if(!failoverDirty){failoverDraft=new Set(state.failover?.nodes||[]);$('failover-enabled').checked=!!state.failover?.enabled;}
+ $('failover-status').textContent=failoverDirty?'名单尚未保存':healthText();
+ if(active&&state.failover?.enabled&&['retrying','switching','unavailable'].includes(state.health?.status)){
+  $('status-title').textContent='节点连接异常';$('status-pill').textContent=state.health.status==='switching'?'正在切换':'探测失败';$('status-detail').textContent=healthText();
+ }
  renderNodes();
  $('device-description').textContent=demo?'电脑演示 · '+state.device.architecture:'系统架构 '+state.device.architecture+' · 首版仅支持 IPv4';
  $('device-checks').replaceChildren();for(const check of state.device.checks||[]){const row=document.createElement('div');row.className='check'+(check.ok?'':' bad');const icon=document.createElement('span');icon.textContent=check.ok?'✓':'!';const content=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('p');title.textContent=check.name;detail.textContent=check.detail;content.append(title,detail);row.append(icon,content);$('device-checks').append(row);}
  $('events').replaceChildren();for(const event of [...(state.events||[])].reverse()){const li=document.createElement('li'),time=document.createElement('time'),text=document.createElement('span');time.textContent=date(event.time);text.textContent=event.message;li.append(time,text);$('events').append(li);}
  showPage(currentPage);
 }
+function healthText(){
+ const labels={disabled:'尚未开启',demo:'演示模式：只保存名单，不进行网络探测',paused:'已暂停：代理关闭、直连或内核未运行',waiting:'等待首次连通性检查',checking:'正在检查当前节点',healthy:'最近探测通过',retrying:'当前节点探测失败，正在重试',switching:'正在寻找可用备用节点',unavailable:'暂未找到可用节点，稍后重试'};
+ return (labels[state.health?.status]||'等待检查')+(state.health?.failures?' · 连续失败 '+state.health.failures+' 次':'');
+}
+function markFailoverDirty(){failoverDirty=true;$('failover-status').textContent='名单尚未保存';}
 function renderNodes(){
  if(!state)return;const search=$('node-search').value.trim().toLowerCase();$('node-list').replaceChildren();$('empty-nodes').hidden=!!state.nodes.length;
  for(const node of state.nodes.filter(n=>(n.name+' '+n.type).toLowerCase().includes(search))){
   const button=document.createElement('button');button.className='node'+(node.id===state.selected?' selected':'');button.setAttribute('aria-pressed',String(node.id===state.selected));
-  const globe=document.createElement('span');globe.className='node-globe';globe.textContent='◎';const details=document.createElement('div'),name=document.createElement('strong'),protocol=document.createElement('small'),dot=document.createElement('span');name.textContent=node.name;protocol.textContent=node.type+(node.id===state.selected?' · 当前选择':'');details.append(name,protocol);dot.className='radio-dot';button.append(globe,details,dot);button.addEventListener('click',()=>perform(()=>api('settings',{selected:node.id}),'节点已选择'));$('node-list').append(button);
+  const globe=document.createElement('span');globe.className='node-globe';globe.textContent='◎';const details=document.createElement('div'),name=document.createElement('strong'),protocol=document.createElement('small'),dot=document.createElement('span');name.textContent=node.name;protocol.textContent=node.type+(node.id===state.selected?' · 当前选择':'');details.append(name,protocol);dot.className='radio-dot';button.append(globe,details,dot);button.addEventListener('click',()=>perform(()=>api('settings',{selected:node.id}),'节点已选择'));const row=document.createElement('div');row.className='node-entry';const label=document.createElement('label');label.className='backup-choice';const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=failoverDraft.has(node.id);checkbox.setAttribute('aria-label','备用节点：'+node.name);checkbox.addEventListener('change',()=>{if(checkbox.checked&&failoverDraft.size>=5){checkbox.checked=false;message('备用名单最多 5 个节点');return;}if(checkbox.checked)failoverDraft.add(node.id);else failoverDraft.delete(node.id);markFailoverDirty();});label.append(checkbox,document.createTextNode('备用'));row.append(button,label);$('node-list').append(row);
  }
  if(state.nodes.length&&!$('node-list').children.length){const p=document.createElement('p');p.className='muted';p.textContent='没有匹配的节点';$('node-list').append(p);}
 }
@@ -59,3 +70,11 @@ $('close-import').addEventListener('click',()=>$('import-dialog').close());
 $('import-form').addEventListener('submit',async event=>{event.preventDefault();if(working)return;const url=$('sub-url').value.trim(),content=$('sub-content').value.trim();if(!url&&!content){$('import-error').textContent='请填写订阅链接或配置内容';return;}if(url&&content){$('import-error').textContent='链接和配置内容只需填写其中一种';return;}busy(true);$('import-error').textContent='';try{state=await api('subscription',{url,name:$('sub-name').value.trim(),content});$('sub-url').value='';$('sub-content').value='';$('import-dialog').close();render();message('订阅已导入');}catch(e){$('import-error').textContent=e.message;}finally{busy(false);}});
 $('update-subscription').addEventListener('click',()=>perform(()=>api('subscription/refresh',{}),'订阅已更新'));
 api('state').then(data=>{state=data;render();}).catch(()=>showLogin());
+
+$('failover-enabled').addEventListener('change',markFailoverDirty);
+$('save-failover').addEventListener('click',()=>perform(async()=>{const data=await api('settings',{failover:{enabled:$('failover-enabled').checked,nodes:[...failoverDraft]}});failoverDirty=false;return data;},'备用名单已保存'));
+setInterval(async()=>{
+ if(!state||working||failoverDirty||document.visibilityState!=='visible'||$('import-dialog').open)return;
+ const before=state;
+ try{const data=await api('state');if(!working&&state===before&&!failoverDirty){state=data;render();}}catch{}
+},15000);
