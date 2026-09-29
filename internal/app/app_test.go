@@ -84,7 +84,11 @@ type harness struct {
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	d := &recordingDriver{}
-	s, _, err := NewServer(t.TempDir(), "demo", d, DemoDevice())
+	dir := t.TempDir()
+	if err := AtomicWrite(filepath.Join(dir, "admin.key"), []byte("routerlite-demo")); err != nil {
+		t.Fatal(err)
+	}
+	s, _, err := NewServer(dir, "demo", d, DemoDevice())
 	if err != nil {
 		t.Fatal(err)
 	}

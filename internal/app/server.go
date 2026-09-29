@@ -30,6 +30,7 @@ type Server struct {
 	dir           string
 	mode          string
 	key           [32]byte
+	setupRequired bool
 	driver        Driver
 	device        Device
 	events        []Event
@@ -64,35 +65,30 @@ func NewServer(dir, mode string, driver Driver, device Device) (*Server, string,
 	}
 	path := filepath.Join(dir, "admin.key")
 	key, err := os.ReadFile(path)
-	created := ""
 	if os.IsNotExist(err) {
-		if mode == "demo" {
-			key = []byte("routerlite-demo")
-		} else {
-			b := make([]byte, 16)
-			if _, err = rand.Read(b); err != nil {
-				return nil, "", err
-			}
-			key = []byte(hex.EncodeToString(b))
+		if _, stateErr := os.Stat(filepath.Join(dir, "state.json")); !os.IsNotExist(stateErr) {
+			return nil, "", errors.New("已有配置的管理凭据缺失，请从备份恢复；不会重新开放首次设置")
 		}
+		key = []byte(setupMarker)
 		if err = AtomicWrite(path, key); err != nil {
 			return nil, "", err
 		}
-		created = string(key)
 	} else if err != nil {
 		return nil, "", err
 	}
-	if utf8.RuneCountInString(string(key)) < MinPasswordLength {
+	setupRequired := string(key) == setupMarker
+	if !setupRequired && utf8.RuneCountInString(string(key)) < MinPasswordLength {
 		return nil, "", errors.New("admin key is too short")
 	}
 	if mode == "router" && string(key) == "routerlite-demo" {
 		return nil, "", errors.New("此目录使用公开演示口令；请为路由器选择独立的数据目录")
 	}
 	s := &Server{state: state, dir: dir, mode: mode, key: sha256.Sum256(key), driver: driver, device: device, sessions: map[string]time.Time{}, Fetch: FetchSubscription, Save: SaveState}
+	s.setupRequired = setupRequired
 	s.Probe = probeHTTPS
 	s.WriteKey = AtomicWrite
 	s.event("管理服务已启动")
-	return s, created, nil
+	return s, "", nil
 }
 func (s *Server) event(message string) {
 	s.events = append(s.events, Event{Time: time.Now(), Message: message})
@@ -136,6 +132,9 @@ func (s *Server) commit(ctx context.Context, next State) error {
 func (s *Server) Resume(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.setupRequired {
+		return nil
+	}
 	if s.mode == "demo" {
 		return s.driver.Apply(ctx, s.state)
 	}
@@ -214,6 +213,23 @@ func (s *Server) Handler() http.Handler {
 			fail(w, 403, "跨站请求被拒绝")
 			return
 		}
+		if r.URL.Path == "/api/setup" {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			switch r.Method {
+			case "GET":
+				writeJSON(w, 200, map[string]bool{"required": s.setupRequired})
+			case "POST":
+				if !s.setupRequired {
+					fail(w, 409, "已经设置过管理密码，请登录")
+					return
+				}
+				s.setPassword(w, r, true)
+			default:
+				fail(w, 405, "不支持的方法")
+			}
+			return
+		}
 		if r.URL.Path == "/api/session" && r.Method == "POST" {
 			s.login(w, r)
 			return
@@ -254,6 +270,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.setupRequired {
+		fail(w, 409, "请先设置管理密码")
+		return
+	}
 	if time.Now().Before(s.blockedUntil) {
 		fail(w, 429, "尝试次数较多，请一分钟后再试")
 		return

@@ -12,9 +12,17 @@ import (
 
 const MinPasswordLength = 9
 
+// Contains control characters, so it can never be chosen as a valid password.
+// An atomic replacement of this marker completes setup even across restarts.
+const setupMarker = "\x00routerlite-setup-v1\x00"
+
 // The authenticated session is the authorization to change the password.
 // Handler holds s.mu, serializing rotation with login and other management calls.
 func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
+	s.setPassword(w, r, false)
+}
+
+func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, initial bool) {
 	var body struct {
 		Password string `json:"password"`
 		Confirm  string `json:"confirm"`
@@ -36,12 +44,25 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "请勿使用公开的演示口令")
 		return
 	}
+	if initial {
+		// A missing credential beside persisted state must fail closed on restart.
+		// Save before replacing the setup marker; failed writes remain retryable.
+		if err := s.Save(s.dir, s.state); err != nil {
+			fail(w, 500, "初始化保存失败，请检查可用存储后重试")
+			return
+		}
+	}
 	// Persist first. A failed write must leave both the old key and sessions usable.
 	if err := s.WriteKey(filepath.Join(s.dir, "admin.key"), []byte(body.Password)); err != nil {
-		fail(w, 500, "密码保存失败，原密码仍然有效，请检查可用存储")
+		if initial {
+			fail(w, 500, "密码保存失败，请检查可用存储后重新设置")
+		} else {
+			fail(w, 500, "密码保存失败，原密码仍然有效，请检查可用存储")
+		}
 		return
 	}
 	s.key = sha256.Sum256([]byte(body.Password))
+	s.setupRequired = false
 	s.sessions = map[string]time.Time{}
 	s.failures = 0
 	s.blockedUntil = time.Time{}

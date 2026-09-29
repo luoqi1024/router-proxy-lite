@@ -77,12 +77,9 @@ func main() {
 			log.Fatal("demo mode may only bind to loopback")
 		}
 	}
-	s, key, err := app.NewServer(*dir, *mode, driver, device)
+	s, _, err := app.NewServer(*dir, *mode, driver, device)
 	if err != nil {
 		log.Fatal(err)
-	}
-	if key != "" {
-		fmt.Println("Initial management key:", key)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 	if err = s.Resume(ctx); err != nil {

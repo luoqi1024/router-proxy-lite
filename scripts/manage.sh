@@ -7,8 +7,7 @@ case "${1:-}" in
     info)
         echo 'Management address (LAN only):'
         ip -4 addr show br-lan | awk '/inet / {split($2,a,"/"); print "http://" a[1] ":8787"; exit}'
-        echo 'Management key (keep private):'
-        cat "$ROOT/state/admin.key"; echo;;
+        echo '首次打开网页请设置管理密码；已设置过的设备使用现有密码登录。';;
     stop) /etc/init.d/routerlite stop;;
     start) /etc/init.d/routerlite start;;
     disable) /etc/init.d/routerlite disable; /etc/init.d/routerlite stop;;

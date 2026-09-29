@@ -87,7 +87,7 @@ if [ "$AUTOSTART" = 1 ]; then
     /etc/init.d/routerlite enabled || rpl_die '无法确认开机启动。'
 fi
 SUCCESS=1
-echo '安装完成。代理尚未开启，请在网页导入订阅、选择节点和策略。'
+echo '安装完成。请打开网页设置管理密码，再导入订阅、选择节点和策略。代理尚未开启。'
 sh "$ROOT/scripts/manage.sh" info
 if [ "$AUTOSTART" = 1 ]; then echo '管理服务已设为开机启动。';
 else echo '如需开机启动：/etc/init.d/routerlite enable'; fi

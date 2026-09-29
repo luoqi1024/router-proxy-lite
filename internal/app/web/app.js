@@ -7,13 +7,14 @@ async function api(path, body, method) {
  if (body !== undefined) { options.headers['Content-Type']='application/json'; options.body=JSON.stringify(body); }
  const response=await fetch('/api/'+path,options);
  const result=await response.json();
- if (!response.ok) { if(response.status===401 && path!=='session') showLogin(); throw new Error(result.error || '请求失败'); }
+ if (!response.ok) { if(response.status===401 && path!=='session') showLogin(); const e=new Error(result.error || '请求失败');e.status=response.status;throw e; }
  return result;
 }
 function message(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{$('toast').hidden=true;},3200);}
-function showLogin(){$('password-dialog').close();$('password-form').reset();$('app').hidden=true;$('login').hidden=false;state=null;failoverDirty=false;}
+function showLogin(){$('password-dialog').close();$('password-form').reset();$('setup-form').reset();$('setup-form').hidden=true;$('login-form').hidden=false;$('app').hidden=true;$('login').hidden=false;state=null;failoverDirty=false;}
+function showSetup(){showLogin();$('login-form').hidden=true;$('setup-form').hidden=false;}
 function error(text){$('error-banner').textContent=text;$('error-banner').hidden=!text;}
-function busy(value){working=value;document.body.classList.toggle('busy',value);document.querySelectorAll('#app button:not(.nav-item), #import-form button, #password-form button, #password-form input, #app input').forEach(b=>b.disabled=value);}
+function busy(value){working=value;document.body.classList.toggle('busy',value);document.querySelectorAll('#app button:not(.nav-item), #import-form button, #password-form button, #password-form input, #setup-form button, #setup-form input, #app input').forEach(b=>b.disabled=value);}
 async function perform(action,success){if(working)return;busy(true);error('');try{const data=await action();if(data&&data.nodes){state=data;render();}if(success)message(success);}catch(e){error(e.message);}finally{busy(false);}}
 function showPage(page){currentPage=page;for(const p of ['overview','nodes','device'])$('page-'+p).hidden=p!==page;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('breadcrumb').textContent='工作空间 / '+({overview:'网络概览',nodes:'节点与订阅',device:'设备与记录'}[page]);}
 function date(value){if(!value||value.startsWith('0001-'))return '尚未更新';return new Date(value).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
@@ -69,7 +70,7 @@ $('open-import').addEventListener('click',()=>{$('import-error').textContent='';
 $('close-import').addEventListener('click',()=>$('import-dialog').close());
 $('import-form').addEventListener('submit',async event=>{event.preventDefault();if(working)return;const url=$('sub-url').value.trim(),content=$('sub-content').value.trim();if(!url&&!content){$('import-error').textContent='请填写订阅链接或配置内容';return;}if(url&&content){$('import-error').textContent='链接和配置内容只需填写其中一种';return;}busy(true);$('import-error').textContent='';try{state=await api('subscription',{url,name:$('sub-name').value.trim(),content});$('sub-url').value='';$('sub-content').value='';$('import-dialog').close();render();message('订阅已导入');}catch(e){$('import-error').textContent=e.message;}finally{busy(false);}});
 $('update-subscription').addEventListener('click',()=>perform(()=>api('subscription/refresh',{}),'订阅已更新'));
-api('state').then(data=>{state=data;render();}).catch(()=>showLogin());
+api('setup').then(info=>{if(info.required){showSetup();return;}return api('state').then(data=>{state=data;render();});}).catch(()=>showLogin());
 
 $('failover-enabled').addEventListener('change',markFailoverDirty);
 $('save-failover').addEventListener('click',()=>perform(async()=>{const data=await api('settings',{failover:{enabled:$('failover-enabled').checked,nodes:[...failoverDraft]}});failoverDirty=false;return data;},'备用名单已保存'));
@@ -89,5 +90,15 @@ $('password-form').addEventListener('submit',async event=>{
  busy(true);$('password-error').textContent='';
  try{await api('password',{password,confirm});showLogin();$('login-error').textContent='';message('密码已修改，请使用新密码登录');$('login-key').focus();}
  catch(e){$('password-error').textContent=e.message;}
+ finally{busy(false);}
+});
+
+$('setup-form').addEventListener('submit',async event=>{
+ event.preventDefault();if(working)return;
+ const password=$('setup-password').value,confirm=$('setup-confirm').value;
+ if(password!==confirm){$('setup-error').textContent='两次输入的密码不一致';return;}
+ busy(true);$('setup-error').textContent='';let saved=false;
+ try{await api('setup',{password,confirm});saved=true;showLogin();state=await api('session',{key:password});render();message('管理密码已设置');}
+ catch(e){if(saved||e.status===409){showLogin();$('login-error').textContent=saved?'密码已设置，请使用刚设置的密码登录':e.message;}else{$('setup-error').textContent=e.message;}}
  finally{busy(false);}
 });
