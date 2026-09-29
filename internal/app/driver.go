@@ -84,8 +84,8 @@ func (d *RouterDriver) launchLocked(ctx context.Context, s State) error {
 	if err != nil {
 		return err
 	}
-	// Apply validates once before stopping the current process. The rollback
-	// configuration was validated previously; avoid a second memory-heavy check.
+	// Apply validates once, serializing the check on memory-constrained devices.
+	// The rollback configuration was validated previously.
 	path := filepath.Join(d.DataDir, "config.runtime.json")
 	if err = AtomicWrite(path, b); err != nil {
 		return errors.New("保存运行配置失败")
@@ -168,14 +168,20 @@ func (d *RouterDriver) Apply(ctx context.Context, s State) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	old := d.applied
-	// Verify selected configuration before interrupting the currently working process.
+	var config []byte
 	if s.Enabled && s.Policy != "direct" {
 		b, err := RenderConfig(s, d.Device, d.Assets)
 		if err != nil {
 			return err
 		}
+		config = b
+	}
+	check := func() error {
+		if config == nil {
+			return nil
+		}
 		tmp := filepath.Join(d.DataDir, "config.check.json")
-		if err = AtomicWrite(tmp, b); err != nil {
+		if err := AtomicWrite(tmp, config); err != nil {
 			return err
 		}
 		defer os.Remove(tmp)
@@ -183,23 +189,24 @@ func (d *RouterDriver) Apply(ctx context.Context, s State) error {
 		defer cancel()
 		cmd := exec.CommandContext(cctx, d.Core, "check", "-c", tmp)
 		cmd.Env = append(os.Environ(), "GOGC=50", "GOMEMLIMIT=16MiB", "GOMAXPROCS=2")
-		if err = cmd.Run(); err != nil {
-			return errors.New("新配置检查失败，当前连接未改变")
+		if err := cmd.Run(); err != nil {
+			return errors.New("内核配置检查失败")
 		}
+		return nil
 	}
-	if err := d.stopLocked(); err != nil {
-		return errors.New("旧网络规则未能清理，请先运行维护脚本 stop")
-	}
-	if err := d.launchLocked(ctx, s); err != nil {
-		if cleanupErr := d.stopLocked(); cleanupErr != nil {
-			return errors.New("启动失败且规则清理未完成，请运行维护脚本 stop")
-		}
+	restore := func() error {
 		rctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		if restoreErr := d.launchLocked(rctx, old); restoreErr != nil {
 			d.stopLocked()
 			return errors.New("新配置启动失败，旧代理也未能恢复；已尝试清理转发规则")
 		}
+		return nil
+	}
+	meminfo, _ := os.ReadFile("/proc/meminfo")
+	if err := transitionCore(d.current == nil || coreCheckHeadroom(meminfo), check, d.stopLocked, func() error {
+		return d.launchLocked(ctx, s)
+	}, restore); err != nil {
 		return err
 	}
 	d.applied = s
