@@ -16,22 +16,21 @@ function showSetup(){showLogin();$('login-form').hidden=true;$('setup-form').hid
 function error(text){$('error-banner').textContent=text;$('error-banner').hidden=!text;}
 function busy(value){working=value;document.body.classList.toggle('busy',value);document.querySelectorAll('#app button:not(.nav-item), #import-form button, #password-form button, #password-form input, #setup-form button, #setup-form input, #app input').forEach(b=>b.disabled=value);}
 async function perform(action,success){if(working)return;busy(true);error('');try{const data=await action();if(data&&data.nodes){state=data;render();}if(success)message(success);}catch(e){error(e.message);}finally{busy(false);}}
-function showPage(page){currentPage=page;for(const p of ['overview','nodes','device'])$('page-'+p).hidden=p!==page;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('breadcrumb').textContent='工作空间 / '+({overview:'网络概览',nodes:'节点与订阅',device:'设备与记录'}[page]);}
+function showPage(page){currentPage=page;for(const p of ['overview','nodes','device'])$('page-'+p).hidden=p!==page;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));}
 function date(value){if(!value||value.startsWith('0001-'))return '尚未更新';return new Date(value).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
 function render(){
  if(!state)return;
  $('login').hidden=true;$('app').hidden=false;$('version').textContent='v'+state.version;
  const demo=state.mode==='demo';$('demo-banner').hidden=!demo;$('demo-import').hidden=!demo;
  const chosen=state.nodes.find(n=>n.id===state.selected);
- $('selected-node').textContent=chosen?chosen.name:'还没有选择节点';$('node-protocol').textContent=chosen?chosen.type:'未选择';
- $('node-detail').textContent=chosen?(demo?'示例节点 · 仅用于交互演示':'使用此节点作为代理出口'):'导入订阅，找到你的第一个出口。';
+ $('selected-node').textContent=chosen?chosen.name:'未选择节点';$('node-protocol').textContent=chosen?chosen.type:'未选择';
  const direct=state.policy==='direct';const active=state.enabled&&state.running&&!direct;
  $('status-card').classList.toggle('on',active);$('status-title').textContent=active?'代理已开启':direct?'全部直连':state.enabled?'代理未就绪':'代理已关闭';
- $('status-pill').textContent=active?(demo?'模拟运行':'运行中'):'普通上网';
- $('status-detail').textContent=active?(demo?'模拟连接已开启，实际网络保持不变。':'新连接将按所选策略转发。'):direct?'所有连接使用普通上网路径。':state.enabled?'内核没有运行，请检查设备与记录。':'准备好节点后，一键开启。';
- $('toggle-proxy').textContent=state.enabled?'关闭代理 →':'开启代理 ↗';
+ $('status-pill').textContent=active?(demo?'模拟运行':'运行中'):direct?'直连':state.enabled?'异常':'已关闭';
+ $('status-detail').textContent=active?(demo?'演示模式，不影响实际网络。':'按所选策略转发。'):direct?'所有连接直连。':state.enabled?'内核未运行，请关闭后重新开启。':'开启后按所选策略转发。';
+ $('toggle-proxy').textContent=state.enabled?'关闭代理':'开启代理';
  document.querySelectorAll('[data-policy]').forEach(b=>{b.classList.toggle('selected',b.dataset.policy===state.policy);b.setAttribute('aria-pressed',String(b.dataset.policy===state.policy));});
- $('subscription-name').textContent=state.subscriptionName||'还没有订阅';$('subscription-updated').textContent=state.subscriptionName?'更新于 '+date(state.updatedAt)+' · '+state.nodes.length+' 个节点':'支持 Clash / Mihomo 格式';
+ $('subscription-name').textContent=state.subscriptionName||'未导入订阅';$('subscription-updated').textContent=state.subscriptionName?'更新于 '+date(state.updatedAt)+' · '+state.nodes.length+' 个节点':'支持 Clash / Mihomo 格式';
  $('node-count').textContent=String(state.nodes.length);$('warnings').textContent=(state.warnings||[]).join('\n');$('warnings').hidden=!(state.warnings||[]).length;
  if(!failoverDirty){failoverDraft=new Set(state.failover?.nodes||[]);$('failover-enabled').checked=!!state.failover?.enabled;}
  $('failover-status').textContent=failoverDirty?'名单尚未保存':healthText();
@@ -39,7 +38,7 @@ function render(){
   $('status-title').textContent='节点连接异常';$('status-pill').textContent=state.health.status==='switching'?'正在切换':'探测失败';$('status-detail').textContent=healthText();
  }
  renderNodes();
- $('device-description').textContent=demo?'电脑演示 · '+state.device.architecture:'系统架构 '+state.device.architecture+' · 首版仅支持 IPv4';
+ $('device-description').textContent=demo?'电脑演示 · '+state.device.architecture:state.device.architecture+' · 仅 IPv4';
  $('device-checks').replaceChildren();for(const check of state.device.checks||[]){const row=document.createElement('div');row.className='check'+(check.ok?'':' bad');const icon=document.createElement('span');icon.textContent=check.ok?'✓':'!';const content=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('p');title.textContent=check.name;detail.textContent=check.detail;content.append(title,detail);row.append(icon,content);$('device-checks').append(row);}
  $('events').replaceChildren();for(const event of [...(state.events||[])].reverse()){const li=document.createElement('li'),time=document.createElement('time'),text=document.createElement('span');time.textContent=date(event.time);text.textContent=event.message;li.append(time,text);$('events').append(li);}
  showPage(currentPage);
