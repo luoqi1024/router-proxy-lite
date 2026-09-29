@@ -2,12 +2,13 @@
 START=99
 STOP=10
 USE_PROCD=1
+ROOT=$(readlink -f "$initscript")
+ROOT=${ROOT%/scripts/routerlite.init}
+case "$ROOT" in /data/routerlite|/overlay/routerlite) :;; *) return 1;; esac
 start_service() {
-    LAN_IP=$(ip -4 addr show br-lan | awk '/inet / {split($2,a,"/"); print a[1]; exit}')
-    [ -n "$LAN_IP" ] || { echo 'br-lan IPv4 not found; configure the adapter manually'; return 1; }
     procd_open_instance
-    procd_set_param command /data/routerlite/bin/routerlite --mode router --experimental-router --listen "$LAN_IP:8787" --data-dir /data/routerlite/state --lan br-lan
-    procd_set_param env SSL_CERT_FILE=/data/routerlite/assets/ca-certificates.crt GOGC=50 GOMEMLIMIT=24MiB GOMAXPROCS=2
+    procd_set_param command "$ROOT/scripts/run.sh"
+    procd_set_param env SSL_CERT_FILE="$ROOT/assets/ca-certificates.crt" GOGC=50 GOMEMLIMIT=24MiB GOMAXPROCS=2
     procd_set_param respawn 3600 10 5
     procd_set_param term_timeout 20
     procd_set_param stdout 0
@@ -15,5 +16,5 @@ start_service() {
     procd_close_instance
 }
 stop_service() {
-    RPL_DATA=/data/routerlite/state /bin/sh /data/routerlite/scripts/network.sh stop
+    RPL_DATA="$ROOT/state" /bin/sh "$ROOT/scripts/network.sh" stop
 }

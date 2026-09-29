@@ -84,25 +84,15 @@ func (d *RouterDriver) launchLocked(ctx context.Context, s State) error {
 	if err != nil {
 		return err
 	}
-	candidate := filepath.Join(d.DataDir, "config.candidate.json")
-	if err = AtomicWrite(candidate, b); err != nil {
-		return errors.New("无法写入配置")
-	}
-	defer os.Remove(candidate)
-	checkCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
-	defer cancel()
-	check := exec.CommandContext(checkCtx, d.Core, "check", "-c", candidate)
-	check.Env = append(os.Environ(), "GOGC=50", "GOMEMLIMIT=32MiB", "GOMAXPROCS=2")
-	if err = check.Run(); err != nil {
-		return errors.New("内核配置检查失败：节点协议可能不受此内核支持")
-	}
+	// Apply validates once before stopping the current process. The rollback
+	// configuration was validated previously; avoid a second memory-heavy check.
 	path := filepath.Join(d.DataDir, "config.runtime.json")
 	if err = AtomicWrite(path, b); err != nil {
 		return errors.New("保存运行配置失败")
 	}
 	cmd := exec.Command(d.Core, "run", "-c", path)
 	configureChild(cmd)
-	cmd.Env = check.Env
+	cmd.Env = append(os.Environ(), "GOGC=50", "GOMEMLIMIT=32MiB", "GOMAXPROCS=2")
 	// Provider messages can include server addresses. Never expose raw core output in the UI.
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
@@ -192,6 +182,7 @@ func (d *RouterDriver) Apply(ctx context.Context, s State) error {
 		cctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(cctx, d.Core, "check", "-c", tmp)
+		cmd.Env = append(os.Environ(), "GOGC=50", "GOMEMLIMIT=16MiB", "GOMAXPROCS=2")
 		if err = cmd.Run(); err != nil {
 			return errors.New("新配置检查失败，当前连接未改变")
 		}

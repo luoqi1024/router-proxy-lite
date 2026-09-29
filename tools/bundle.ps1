@@ -1,7 +1,8 @@
-param([string]$Assets="$PSScriptRoot/../.local/assets")
+param([string]$Assets="$PSScriptRoot/../.local/assets", [string]$BundleName='routerlite-armv7-preview')
 $ErrorActionPreference='Stop'
 $root=(Resolve-Path "$PSScriptRoot/..").Path
-$bundle="$root/dist/routerlite-armv7-preview"
+if($BundleName -notmatch '^[a-zA-Z0-9_-]+$'){throw 'Invalid bundle name'}
+$bundle="$root/dist/$BundleName"
 if(Test-Path $bundle){throw 'Bundle already exists; use a fresh build directory after reviewing the old bundle'}
 foreach($file in @('ca-certificates.crt','geosite-cn.srs','geoip-cn.srs')){if(!(Test-Path "$Assets/$file")){throw "Missing asset: $file"}}
 New-Item -ItemType Directory -Force "$bundle/bin","$bundle/assets","$bundle/scripts" | Out-Null
@@ -17,5 +18,5 @@ $manifest=Get-ChildItem $bundle -File -Recurse | Sort-Object FullName | ForEach-
 [IO.File]::WriteAllText("$bundle/SHA256SUMS",(($manifest -join "`n")+"`n"),[Text.UTF8Encoding]::new($false))
 $files=Get-ChildItem $bundle -File -Recurse
 $bytes=($files|Measure-Object Length -Sum).Sum
-[pscustomobject]@{Bytes=$bytes;MiB=[math]::Round($bytes/1MB,3);InstallReserveMiB=2;Status='UNTESTED ON HARDWARE'} | ConvertTo-Json | Set-Content "$root/dist/size-report.json"
+[pscustomobject]@{Bytes=$bytes;MiB=[math]::Round($bytes/1MB,3);InstallReserveMiB=2;Status='Development build; verify this exact bundle on target hardware'} | ConvertTo-Json | Set-Content "$root/dist/size-report.json"
 Write-Output "Development bundle: $bundle ($bytes bytes). Not a validated public release."
