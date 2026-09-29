@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 import subprocess
 import tarfile
 import zipfile
+import importlib.util
 
 REPO = Path(__file__).resolve().parents[1]
 CORE_SHA256 = '67dd8f8c37ecaaadcfcafad1f0827eed4b034c963b86fd3aa5c0d7a36876845d'
@@ -34,7 +35,7 @@ def escaped(value):
     return ''.join('!'+c.lower() if c.isupper() else c for c in value)
 
 
-def build(go, binaries, caches, core_archive, output):
+def build(go, binaries, caches, core_archive, output, rule_inputs=None):
     if output.exists():
         raise ValueError('Output already exists')
     if hashlib.sha256(core_archive.read_bytes()).hexdigest() != CORE_SHA256:
@@ -78,6 +79,12 @@ def build(go, binaries, caches, core_archive, output):
             raise ValueError('Private path must not be tracked: '+name)
         payloads['routerlite/'+name] = path
     payloads['upstream/sing-box-v1.14.2.tar.gz'] = core_archive
+    if rule_inputs is not None:
+        spec = importlib.util.spec_from_file_location('build_rules', REPO/'tools/build-rules.py')
+        rules = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rules)
+        for name in rules.verified_inputs(rule_inputs):
+            payloads['rule-inputs/'+name] = rule_inputs/name
     manifest = {
         'status': 'source candidate; complete offline rebuild and release review pending',
         'repositoryCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO).decode().strip(),
@@ -110,9 +117,10 @@ if __name__ == '__main__':
     parser.add_argument('--module-cache', type=Path, action='append', required=True)
     parser.add_argument('--core-source', type=Path, default=REPO/'.local/tools/sing-box-source.tar.gz')
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--rule-inputs', type=Path, help='Verified pinned data inputs to include for rebuilding rules')
     args = parser.parse_args()
     try:
-        count = build(args.go, [args.manager, args.core], args.module_cache, args.core_source, args.output)
+        count = build(args.go, [args.manager, args.core], args.module_cache, args.core_source, args.output, args.rule_inputs)
     except (ValueError, OSError, subprocess.CalledProcessError) as exc:
         parser.error(str(exc))
     print(f'Packed {count} verified module sources into {args.output}; not published or release-certified.')

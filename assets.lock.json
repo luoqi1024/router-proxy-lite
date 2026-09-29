@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "verifiedAt": "2026-09-29",
-  "distributionStatus": "development-only; GeoIP downstream data terms and full release acceptance pending",
+  "distributionStatus": "source-audited candidate; hardware acceptance pending",
   "assets": [
     {
       "name": "ca-certificates.crt",
@@ -14,21 +14,23 @@
     },
     {
       "name": "geoip-cn.srs",
-      "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/7fe82a879ad2666526730c195b55a6d8d9147908/geoip-cn.srs",
-      "version": "7fe82a879ad2666526730c195b55a6d8d9147908",
-      "license": "Generator GPL-3.0-or-later; MaxMind GeoLite2 data terms require separate review",
-      "source": "https://github.com/Dreamacro/maxmind-geoip",
-      "size": 34185,
-      "sha256": "ebee603fdf402314b44b9f653cdcf6d9cc9c41e84e2b3515e3123c5c920a93bc"
+      "url": "https://github.com/luoqi1024/router-proxy-lite/releases/download/v0.1.0-alpha.1/assets--geoip-cn.srs",
+      "version": "3f18f6912c3898eddaf05e3ba50bc9d45b541040",
+      "license": "CC-BY-4.0",
+      "source": "https://db-ip.com/db/download/ip-to-country-lite",
+      "size": 28605,
+      "sha256": "bbf1c7c87f7a8cc32f784ecce52edb67d1f777651b678145325d614d8101f5fd",
+      "build": "tools/build-rules.py; pinned DB-IP IPv4 mirror input in rules.lock.json"
     },
     {
       "name": "geosite-cn.srs",
-      "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/e6a8117545c35a17c508e3f37a9a990571234428/geosite-cn.srs",
-      "version": "e6a8117545c35a17c508e3f37a9a990571234428",
-      "license": "Generator GPL-3.0-or-later; source domain-list-community MIT; exact input revision not attested",
+      "url": "https://github.com/luoqi1024/router-proxy-lite/releases/download/v0.1.0-alpha.1/assets--geosite-cn.srs",
+      "version": "bcea25493ed28c387660fe49ce1ceb242d2efca0",
+      "license": "MIT",
       "source": "https://github.com/v2fly/domain-list-community",
-      "size": 56190,
-      "sha256": "081255eadc553fcd2450a9b2020c6d3389b9e051a6b768802eb8cccd6f17a4ed"
+      "size": 45842,
+      "sha256": "40851a45fec65ea98fee16b4e3d1558a37d98eee996408744c9e2d2e364f64ab",
+      "build": "tools/build-rules.py; pinned cn source input in rules.lock.json"
     }
   ]
 }

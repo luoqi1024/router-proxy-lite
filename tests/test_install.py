@@ -208,6 +208,16 @@ esac
         with tarfile.open(output/'routerlite-v0.1-test-armv7.tar.gz') as archive:
             self.assertIn('scripts/setup.sh', archive.getnames())
             self.assertTrue(all(m.isfile() and not m.name.startswith('/') and '..' not in m.name for m in archive))
+        manifest = (output/'DOWNLOAD-SHA256SUMS').read_text()
+        self.assertIn('  release-info.json\n', manifest)
+
+    def test_bootstrap_check_does_not_download_or_create_stage(self):
+        entry = self.bootstrap()
+        result = subprocess.run(['sh', str(entry), '--check'], env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.root/'data/routerlite.stage').exists())
+        self.assertFalse((self.root/'service.log').exists())
+        self.assertNotIn('curl ', (self.root/'commands.log').read_text())
 
 
 if __name__ == '__main__':

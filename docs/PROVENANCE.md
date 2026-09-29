@@ -1,54 +1,67 @@
-# 资源与源码准备
+# 构建、资源与对应源码
 
-2026-09-29 增加固定资源下载、主要许可文本与源码候选包工具。当前仍为开发预览，没有公开发布安装包。
+构建在电脑上完成。路由器只安装管理程序、精简内核、证书、两份规则和必要许可文件，不安装 Go、Python、UPX 或源码缓存。
 
-## 固定资源
+## 构建程序
 
-`assets.lock.json` 记录三个必需文件的公开 HTTPS 地址、日期/提交、字节数、SHA256 及来源说明。运行：
-
-```powershell
-python tools/assets.py fetch
-python tools/assets.py verify
-```
-
-默认输出 `.local/assets-pinned`，与早期 `.local/assets` 分开。下载限制 HTTPS，拒绝降级跳转；数据完整读入并核对大小和哈希后才落盘。已有文件不一致时拒绝覆盖，维护者应使用新目录。`tools/bundle.ps1` 默认使用该目录，并强制按锁文件验证。
-
-资源更新是一次代码变更：先核实上游日期/提交与数据来源，再更新锁文件，使用新目录下载，运行真实内核配置检查和分流回归，之后提交。不能通过浮动 `latest` 或修改本地文件绕过锁定。固定旧版本不等于永远保持最新，CA/规则仍需维护者定期评估。
-
-CA 与 GeoIP 文件已找到与原型完全一致的上游字节；原型 GeoSite 文件未找到对应历史提交，因此新开发包固定到已核实的上游提交。新旧 GeoSite 的 SHA256 不同，新资源尚未完成实机分流验收。
-
-## 许可证与来源层次
-
-来源链接、精确版本和未解决事项见 [THIRD_PARTY.md](../THIRD_PARTY.md)。七份主要原文保存在 `licenses/`，随运行包分发，增加约 28 KiB；GPL 全文另在项目根目录 `LICENSE`。
-
-需要区分转换程序和底层数据：SagerNet 的转换代码采用 GPL，而 GeoIP 输入来自标注使用 MaxMind GeoLite2 的仓库。这里没有把代码许可推导成底层数据库可任意再分发。该数据条款仍是公开发布前的待办。
-
-GeoSite 的二进制提交已固定、输入项目及其 MIT 文本已核实，但该二进制所对应的精确输入数据版本仍未证明。主要许可证集合也不等于完整传递依赖审计。
-
-## 源码候选包
+当前复现工具链为 Go 1.27.1、UPX 5.2.1、Python 3.12+。Windows 构建脚本默认从 `.local/tools` 查找 Go 和 UPX；工具应从各自官方渠道取得。管理程序的 `tools/build.ps1` 可通过 `-Go`、`-Upx` 指定路径。内核脚本固定 sing-box 1.14.2 的源码哈希，并用 `tools/core-profile.py` 精简协议注册。
 
 ```powershell
-python tools/source-bundle.py --module-cache .local/gopath/pkg/mod --output dist/routerlite-source-candidate.tar.gz
+./tools/build.ps1 -Target armv7
+./tools/build-core.ps1 -Target armv7
+./tools/build-core.ps1 -Target check-windows
 ```
 
-可重复提供 `--module-cache` 指向构建时实际使用的缓存；不会下载缺失依赖或扫描系统其他目录。工具读取 `dist/routerlite-armv7.raw` 与 `dist/routerlite-core-armv7.raw` 的真实 Go 构建信息：
+构建脚本使用 `-trimpath -buildvcs=false`，保留 `.raw` 原始二进制后执行 UPX。每次编译到新文件，避免 Go build ID 导致复用已压缩的产物。
 
-- 收集两份二进制中的确切依赖版本，逐 ZIP 重新计算 Go `h1`，与二进制中的校验值比对。
-- 收录对应 ZIP、`.mod`、`.info` 和各依赖源文件中的许可证/NOTICE 路径。
-- 收录经 SHA256 验证的原始 sing-box 源码包，以及 Git 已跟踪的 RouterLite 源码、精简注册脚本、构建脚本和锁文件。
-- 输出源码文件哈希清单与 `SOURCE-MANIFEST.json`，记录二进制哈希、Git 提交和工作区是否有未提交修改。
+## 生成规则
 
-新增源码文件需要先纳入 Git 跟踪再生成。工作区未提交的候选包会明确标记 dirty，不能冒充某个已提交版本的正式对应源码。该工具不会收录 `.local`、订阅、路由器备份和已忽略目录。
+`rules.lock.json` 固定两份原始数据的公开地址、字节数、SHA256 和署名。IP 输入是 DB-IP Lite 的固定镜像快照，采用 CC BY 4.0；域名输入是固定提交的 domain-list-community，采用 MIT。规则转换工具核对输入后才运行；不会在路由器上下载大数据库。
 
-候选包是准备材料，**尚不能称作完成验收的离线重建包**：仍需解包、建立本地 Go 模块源、检查是否缺少模块图元数据，使用相同 Go/UPX 版本重建并比较产物，再复核对应源码及完整许可要求。Go/UPX 工具链本身不放进路由器安装包。
+```powershell
+python tools/build-rules.py --fetch --output .local/rules-build --core dist/routerlite-core-check.exe
+```
 
-构建脚本现在关闭自动 Git 版本注入；内核每次在新的源码目录解压后应用修改，减少未跟踪残留和父目录 Git 状态对构建的影响。是否达到逐字节可复现仍以实际重建比较为准。
+输出目录必须尚不存在。输出含人可读 JSON、编译后的 SRS 和输出哈希。此转换器只接受当前固定快照实际使用的域名语法；遇到未来未支持的语法会报错，避免悄悄遗漏规则。它支持递归包含、属性筛选、精确域名、后缀、关键词和正则。
 
-## 本轮验证
+将两个 `.srs` 和锁文件所指的 Mozilla CA 包放入同一资源目录，再验证、打包：
 
-- 三个固定资源均从 HTTPS 上游重新取得并核对 SHA256；真实内核配置测试通过。
-- 7 项资源/源码校验测试、11 项安装模拟、3 项包校验及4项网络事务测试通过；10 个 shell 文件语法通过。
-- 本机相同 Go 1.27.1 / UPX 5.2.1 工具链连续构建两次，管理程序与内核的原始、压缩文件共四个 SHA256 全部相同。该结论限于本机，不能代替源码归档的独立离线重建。
-- 修复 Go 复用已压缩产物的问题：UPX 保留 Go build ID，直接再次编译到同一路径可能让 Go 跳过输出，随后 UPX 报 AlreadyPacked。现在每次编译到新文件，再保留原始副本和执行压缩。
-- 56 个依赖源码 ZIP 的 `h1` 与二进制嵌入记录一致，全部找到了惯用文件名的许可证或 NOTICE；这仅是收集，不代替逐项许可审阅。约 63.4 MiB 的源码候选归档通过逐文件哈希核验。
-- 完整运行目录为 9,261,199 bytes（约 8.83 MiB），23 个文件通过清单校验。源码归档在电脑/发布侧保留，不会把几十 MiB 源码装进路由器。
+```powershell
+python tools/assets.py verify --output .local/release-assets
+./tools/bundle.ps1 -Assets .local/release-assets -BundleName routerlite-armv7-candidate
+python tools/package-install.py --bundle dist/routerlite-armv7-candidate --output dist/install-candidate --version 0.1.0-candidate
+```
+
+CA 下载地址和哈希见 `assets.lock.json`。资源目录里的三个文件必须全部符合该锁文件。当前锁文件内 SRS 地址是计划中的首个 Release 资产地址，**尚未发布，不能使用 `assets.py fetch` 下载它们**；维护者现阶段按上述源码转换流程生成。二进制发布后可用 `assets.py fetch` 获取已核验的完整资源集。
+
+不接受校验不符的本地替换，不自动覆盖旧构建目录。更新数据时须审核新来源、转换结果与分流行为，再修改锁文件；用户设备不会因此自动更新。
+
+## 完整对应源码
+
+先确认所有新源文件已提交，再从实际原始二进制生成对应源码包：
+
+```powershell
+python tools/source-bundle.py --module-cache .local/gopath/pkg/mod --rule-inputs .local/rule-inputs --output dist/routerlite-source.tar.gz
+```
+
+可多次指定 `--module-cache`。工具按二进制真实 Go 模块信息收集依赖，逐 ZIP 计算 `h1` 并比对；归档包含模块代理、原始内核、项目源码、构建脚本、规则原始输入、清单和哈希。未提交的工作区会标记 dirty，不得作为已提交版本的发布源码。
+
+模块变化时，从候选包重新收集许可文本，并复核后更新仓库中的 `licenses/go-dependencies.txt`：
+
+```powershell
+python tools/source-notices.py dist/routerlite-source.tar.gz --output .local/go-dependencies-new.txt
+```
+
+解压对应源码包至新目录，使用相同的已安装 Go 工具链验证：
+
+```powershell
+python tools/verify-source.py --source .local/source-extracted --work .local/rebuild-check --go .local/tools/go/bin/go.exe
+```
+
+该命令先校验源码清单，创建空的 Go 缓存，设置本地文件模块代理与 `GOTOOLCHAIN=local`，重新编译管理程序和内核并比对原始二进制哈希。不会下载 Go 或联网获取模块。压缩文件可用相同 UPX 的 `--best --lzma` 从原始文件重建。规则可用对应源码中的 `rule-inputs` 离线重建，但需要与宿主系统匹配的 sing-box 编译工具。
+
+## 已验证与待验证
+
+2026-09-29：旧候选对应源码中的 56 个依赖可独立离线重建，管理程序与内核原始二进制逐字节一致。新规则已通过真实内核的二进制编译和国内/国外匹配抽查；生成器、文件校验、隔离安装和网络事务测试通过。
+
+当前候选的实机全新安装、网页首次设置密码、新规则联网及整机重启仍待执行。完整发布要求见 [发布清单](RELEASE.md)，这里的构建成功不代替硬件验收。

@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "inputs": [
+    {
+      "name": "dbip-country-ipv4.csv",
+      "url": "https://raw.githubusercontent.com/sapics/ip-location-db/3f18f6912c3898eddaf05e3ba50bc9d45b541040/dbip-country/dbip-country-ipv4.csv",
+      "sha256": "978dc838404931209cc2c84f265cb67cd1033f7ae6d344b55a2fd4aaa345976d",
+      "size": 10882833,
+      "license": "CC-BY-4.0",
+      "attribution": "IP Geolocation by DB-IP (https://db-ip.com); IPv4 CN ranges extracted and converted by RouterLite"
+    },
+    {
+      "name": "domain-list-community.tar.gz",
+      "url": "https://codeload.github.com/v2fly/domain-list-community/tar.gz/bcea25493ed28c387660fe49ce1ceb242d2efca0",
+      "sha256": "ab216c258da3d4a3d0a4ba3f080138ec5c2ab2ef37e870db2db383ac7381f5a7",
+      "size": 337724,
+      "license": "MIT",
+      "attribution": "v2fly/domain-list-community; cn list resolved and converted by RouterLite"
+    }
+  ]
+}

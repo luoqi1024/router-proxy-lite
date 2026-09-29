@@ -17,7 +17,8 @@ REQUIRED = {'bin/routerlite', 'bin/sing-box', 'scripts/install.sh', 'scripts/set
             'assets/ca-certificates.crt', 'assets/geoip-cn.srs', 'assets/geosite-cn.srs',
             'LICENSE', 'THIRD_PARTY.md', 'licenses/sing-box.txt', 'licenses/mozilla-mpl-2.0.txt',
             'licenses/go-runtime.txt', 'licenses/yaml-v3.txt', 'licenses/upx.txt',
-            'licenses/sing-rule-generators.txt', 'licenses/domain-list-community.txt'}
+            'licenses/domain-list-community.txt', 'licenses/dbip.txt', 'licenses/cc-by-4.0.txt',
+            'licenses/go-dependencies.txt'}
 
 
 def package(bundle: Path, output: Path, base_url: str | None, version: str):
@@ -78,14 +79,14 @@ def package(bundle: Path, output: Path, base_url: str | None, version: str):
             info.size = len(data)
             info.mode = 0o755 if relative.startswith(('bin/', 'scripts/')) else 0o644
             tar.addfile(info, io.BytesIO(data))
-    (output / 'DOWNLOAD-SHA256SUMS').write_text('\n'.join(
-        hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name
-        for p in sorted(output.iterdir()) if p.is_file()) + '\n', encoding='utf-8')
     (output / 'release-info.json').write_text(json.dumps({
         'version': version, 'architecture': 'armv7', 'requiredFreeKiB': need,
         'payloadBytes': sum(map(len, files.values())), 'files': len(files),
         'status': 'development; not published; hardware acceptance still required',
     }, indent=2) + '\n', encoding='utf-8')
+    (output / 'DOWNLOAD-SHA256SUMS').write_text('\n'.join(
+        hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name
+        for p in sorted(output.iterdir()) if p.is_file()) + '\n', encoding='utf-8')
     return need
 
 

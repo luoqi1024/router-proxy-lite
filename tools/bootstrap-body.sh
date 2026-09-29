@@ -45,13 +45,14 @@ trap cleanup_download EXIT
 trap 'exit 130' HUP INT TERM
 fetch_file() {
     url=$1; output=$2; size=$3
-    set -- --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 180 --max-filesize "$size"
+    set -- --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 180 --retry 2 --retry-delay 2 --max-filesize "$size"
     [ -z "$CA_FILE" ] || set -- "$@" --cacert "$CA_FILE"
     curl "$@" --output "$output" "$url" || rpl_die '下载失败：请检查网络、系统时间和可信 CA。也可在电脑下载完整包后离线安装。不会跳过证书校验。'
 }
 printf '正在安装 RouterLite %s，架构 ARMv7…\n' "$RELEASE"
 while read -r digest size relative asset; do
     [ -n "$digest" ] || continue
+    printf '下载并校验：%s\n' "$relative"
     destination=$STAGE/$relative
     mkdir -p "$(dirname "$destination")"
     fetch_file "$BASE_URL/$asset" "$destination.part" "$size"
