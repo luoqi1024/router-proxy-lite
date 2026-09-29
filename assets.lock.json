@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "verifiedAt": "2026-09-29",
-  "distributionStatus": "source-audited candidate; hardware acceptance pending",
+  "distributionStatus": "v0.1.0-alpha.1; experimental ARMv7 release",
   "assets": [
     {
       "name": "ca-certificates.crt",

@@ -6,7 +6,7 @@ RouterLite 面向已解锁 SSH 的原厂固件路由器。安装后，导入订�
 
 项目希望保留一个简单的使用流程：**装一次，之后在网页里操作。** 在已适配设备上，不需要更换原厂固件或扩大分区，原有的 Wi-Fi 和路由功能继续使用。
 
-> 当前为开发预览，仅在小米 AX1800 原厂固件上完成部分实机验证，源码已公开，安装包仍在验收，尚未开放下载。其他型号、整机断电重启和长期稳定性仍待验证。
+> 首个公开版本 **[v0.1.0-alpha.1](https://github.com/luoqi1024/router-proxy-lite/releases/tag/v0.1.0-alpha.1)** 已提供 ARMv7 安装包。目前仅在小米 AX1800 原厂固件上完成部分实机验证，属于 Alpha 预览版；整机重启、长期稳定性和其他型号仍待验证。
 
 ## 能做什么
 
@@ -43,20 +43,19 @@ RouterLite 面向已解锁 SSH 的原厂固件路由器。安装后，导入订�
 
 ## 怎么开始使用
 
-**目前还没有公开的一键下载入口。** 开发者可按 [构建说明](docs/PROVENANCE.md) 生成开发包，在已适配设备上测试。
-
-拿到完整开发包后：
-
-1. 自行解锁路由器 SSH，确认原厂网络可以正常上网。
-2. 将完整包上传到路由器，在包目录内依次执行环境检查和安装：
+1. 自行解锁路由器 SSH，用 root 登录，并确认路由器能正常联网。
+2. 在**路由器的 SSH 终端**粘贴以下命令，下载并执行安装入口：
 
    ```sh
-   sh scripts/setup.sh --check
-   sh scripts/setup.sh
+   curl -fL --proto '=https' --proto-redir '=https' https://github.com/luoqi1024/router-proxy-lite/releases/download/v0.1.0-alpha.1/install-routerlite.sh -o /tmp/install-routerlite.sh && sh /tmp/install-routerlite.sh
    ```
 
-3. 安装完成后，终端会显示管理网址。手机或电脑连接这台路由器，打开该网址，首次设置至少 9 个字符的管理密码。
-4. 在“节点”页导入订阅并选择节点，回到“概览”选择策略、开启代理。
+3. 安装完成后，打开终端显示的管理网址，首次设置至少 9 个字符的管理密码。
+4. 在“节点”页导入订阅、选择节点，再到“概览”选择策略并开启代理。
+
+**此命令用于首次安装，不用于覆盖升级。** 检测到现有安装或其他代理时会停止。安装器检查架构、可用内存、持久分区和文件哈希，不刷机、不扩分区。
+
+需要先检查环境，可在 [Release 页面](https://github.com/luoqi1024/router-proxy-lite/releases/tag/v0.1.0-alpha.1) 下载 `install-routerlite.sh`，上传后执行 `sh install-routerlite.sh --check`。路由器无法直连 GitHub 或缺少可信 CA 时，使用同一页面的 ARMv7 离线完整包；具体操作见 [安装指南](docs/INSTALL.md)。不要使用跳过证书校验的下载命令。
 
 安装后代理默认关闭，管理服务设置为开机启动。日常操作通过网页完成，电脑无需一直开机。这里设置的密码仅用于 RouterLite，与 Wi-Fi 和 SSH 密码相互独立。
 

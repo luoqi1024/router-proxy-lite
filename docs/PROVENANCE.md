@@ -32,7 +32,7 @@ python tools/assets.py verify --output .local/release-assets
 python tools/package-install.py --bundle dist/routerlite-armv7-candidate --output dist/install-candidate --version 0.1.0-candidate
 ```
 
-CA 下载地址和哈希见 `assets.lock.json`。资源目录里的三个文件必须全部符合该锁文件。当前锁文件内 SRS 地址是计划中的首个 Release 资产地址，**尚未发布，不能使用 `assets.py fetch` 下载它们**；维护者现阶段按上述源码转换流程生成。二进制发布后可用 `assets.py fetch` 获取已核验的完整资源集。
+CA 下载地址和哈希见 `assets.lock.json`。资源目录里的三个文件必须全部符合该锁文件。锁文件内 SRS 地址对应 v0.1.0-alpha.1 的固定 Release 资产。可用 `python tools/assets.py fetch` 获取完整资源集，也可按上述源码转换流程重新生成。
 
 不接受校验不符的本地替换，不自动覆盖旧构建目录。更新数据时须审核新来源、转换结果与分流行为，再修改锁文件；用户设备不会因此自动更新。
 
@@ -65,3 +65,5 @@ python tools/verify-source.py --source .local/source-extracted --work .local/reb
 2026-09-29：当前 `e6c5158` 候选对应源码中的 56 个依赖可独立离线重建，管理程序与内核的原始和 UPX 压缩二进制逐字节一致。两份规则和模块许可汇编也已从该源码归档重建并逐字节比对通过。新规则已通过真实内核的二进制编译和国内/国外匹配抽查；生成器、文件校验、隔离安装和网络事务测试通过。
 
 当前候选的实机离线全新安装、损坏文件拒绝和人工旧版回退已完成。手机网页首次设密确认、新规则联网及整机重启仍待执行。完整发布要求见 [发布清单](RELEASE.md)，这里的构建成功不代替硬件验收。
+
+v0.1.0-alpha.1 使用上述候选的核心实现和规则，发布时更新管理程序的版本标识。对应源码归档按最终二进制重新生成；完整离线重建对比的实测记录对应 `e6c5158`，不冒充对发布标签重新执行过全部验收。

@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const Version = "0.1.0-dev"
+const Version = "0.1.0-alpha.1"
 
 type Node struct {
 	ID       string         `json:"id"`

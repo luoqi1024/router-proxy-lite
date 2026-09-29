@@ -82,7 +82,7 @@ def package(bundle: Path, output: Path, base_url: str | None, version: str):
     (output / 'release-info.json').write_text(json.dumps({
         'version': version, 'architecture': 'armv7', 'requiredFreeKiB': need,
         'payloadBytes': sum(map(len, files.values())), 'files': len(files),
-        'status': 'development; not published; hardware acceptance still required',
+        'status': 'experimental build; see release notes for verified hardware scope',
     }, indent=2) + '\n', encoding='utf-8')
     (output / 'DOWNLOAD-SHA256SUMS').write_text('\n'.join(
         hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name

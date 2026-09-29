@@ -86,7 +86,7 @@ def build(go, binaries, caches, core_archive, output, rule_inputs=None):
         for name in rules.verified_inputs(rule_inputs):
             payloads['rule-inputs/'+name] = rule_inputs/name
     manifest = {
-        'status': 'source candidate; complete offline rebuild and release review pending',
+        'status': 'corresponding source; binary identities recorded below; verification scope in release notes',
         'repositoryCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO).decode().strip(),
         'workingTreeDirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=REPO)),
         'binaries': [{'name': p.name, 'sha256': hashlib.sha256(p.read_bytes()).hexdigest(), 'build': info} for p, info in zip(binaries, build_info)],
