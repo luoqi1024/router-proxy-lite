@@ -11,9 +11,9 @@ async function api(path, body, method) {
  return result;
 }
 function message(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{$('toast').hidden=true;},3200);}
-function showLogin(){$('app').hidden=true;$('login').hidden=false;state=null;failoverDirty=false;}
+function showLogin(){$('password-dialog').close();$('password-form').reset();$('app').hidden=true;$('login').hidden=false;state=null;failoverDirty=false;}
 function error(text){$('error-banner').textContent=text;$('error-banner').hidden=!text;}
-function busy(value){working=value;document.body.classList.toggle('busy',value);document.querySelectorAll('#app button:not(.nav-item), #import-form button, #app input').forEach(b=>b.disabled=value);}
+function busy(value){working=value;document.body.classList.toggle('busy',value);document.querySelectorAll('#app button:not(.nav-item), #import-form button, #password-form button, #password-form input, #app input').forEach(b=>b.disabled=value);}
 async function perform(action,success){if(working)return;busy(true);error('');try{const data=await action();if(data&&data.nodes){state=data;render();}if(success)message(success);}catch(e){error(e.message);}finally{busy(false);}}
 function showPage(page){currentPage=page;for(const p of ['overview','nodes','device'])$('page-'+p).hidden=p!==page;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('breadcrumb').textContent='工作空间 / '+({overview:'网络概览',nodes:'节点与订阅',device:'设备与记录'}[page]);}
 function date(value){if(!value||value.startsWith('0001-'))return '尚未更新';return new Date(value).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
@@ -74,7 +74,20 @@ api('state').then(data=>{state=data;render();}).catch(()=>showLogin());
 $('failover-enabled').addEventListener('change',markFailoverDirty);
 $('save-failover').addEventListener('click',()=>perform(async()=>{const data=await api('settings',{failover:{enabled:$('failover-enabled').checked,nodes:[...failoverDraft]}});failoverDirty=false;return data;},'备用名单已保存'));
 setInterval(async()=>{
- if(!state||working||failoverDirty||document.visibilityState!=='visible'||$('import-dialog').open)return;
+ if(!state||working||failoverDirty||document.visibilityState!=='visible'||$('import-dialog').open||$('password-dialog').open)return;
  const before=state;
  try{const data=await api('state');if(!working&&state===before&&!failoverDirty){state=data;render();}}catch{}
 },15000);
+
+$('open-password').addEventListener('click',()=>{$('password-form').reset();$('password-error').textContent='';$('password-dialog').showModal();});
+$('close-password').addEventListener('click',()=>$('password-dialog').close());
+$('password-dialog').addEventListener('close',()=>{$('password-form').reset();$('password-error').textContent='';});
+$('password-form').addEventListener('submit',async event=>{
+ event.preventDefault();if(working)return;
+ const password=$('new-password').value,confirm=$('confirm-password').value;
+ if(password!==confirm){$('password-error').textContent='两次输入的新密码不一致';return;}
+ busy(true);$('password-error').textContent='';
+ try{await api('password',{password,confirm});showLogin();$('login-error').textContent='';message('密码已修改，请使用新密码登录');$('login-key').focus();}
+ catch(e){$('password-error').textContent=e.message;}
+ finally{busy(false);}
+});

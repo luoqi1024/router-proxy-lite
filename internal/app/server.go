@@ -37,6 +37,7 @@ type Server struct {
 	blockedUntil  time.Time
 	Fetch         func(context.Context, string) ([]byte, error)
 	Save          func(string, State) error
+	WriteKey      func(string, []byte) error
 	Probe         func(context.Context, int) error
 	revision      uint64
 	health        HealthStatus
@@ -88,6 +89,7 @@ func NewServer(dir, mode string, driver Driver, device Device) (*Server, string,
 	}
 	s := &Server{state: state, dir: dir, mode: mode, key: sha256.Sum256(key), driver: driver, device: device, sessions: map[string]time.Time{}, Fetch: FetchSubscription, Save: SaveState}
 	s.Probe = probeHTTPS
+	s.WriteKey = AtomicWrite
 	s.event("管理服务已启动")
 	return s, created, nil
 }
@@ -235,6 +237,8 @@ func (s *Server) Handler() http.Handler {
 			s.refresh(w, r)
 		case r.URL.Path == "/api/settings" && r.Method == "POST":
 			s.settings(w, r)
+		case r.URL.Path == "/api/password" && r.Method == "POST":
+			s.changePassword(w, r)
 		default:
 			fail(w, 404, "接口不存在")
 		}
