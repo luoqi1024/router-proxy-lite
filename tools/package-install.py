@@ -10,12 +10,14 @@ import shlex
 from urllib.parse import urlsplit
 
 REPO = Path(__file__).resolve().parents[1]
-ALLOWED = re.compile(r'(bin/(routerlite|sing-box)|assets/(ca-certificates\.crt|geoip-cn\.srs|geosite-cn\.srs)|scripts/[a-z-]+\.(sh|init)|LICENSE|THIRD_PARTY\.md)')
+ALLOWED = re.compile(r'(bin/(routerlite|sing-box)|assets/(ca-certificates\.crt|geoip-cn\.srs|geosite-cn\.srs)|scripts/[a-z-]+\.(sh|init)|licenses/[a-z0-9.-]+\.txt|LICENSE|THIRD_PARTY\.md)')
 REQUIRED = {'bin/routerlite', 'bin/sing-box', 'scripts/install.sh', 'scripts/setup.sh',
             'scripts/setup-common.sh', 'scripts/verify.sh', 'scripts/manage.sh',
             'scripts/run.sh', 'scripts/network.sh', 'scripts/routerlite.init',
             'assets/ca-certificates.crt', 'assets/geoip-cn.srs', 'assets/geosite-cn.srs',
-            'LICENSE', 'THIRD_PARTY.md'}
+            'LICENSE', 'THIRD_PARTY.md', 'licenses/sing-box.txt', 'licenses/mozilla-mpl-2.0.txt',
+            'licenses/go-runtime.txt', 'licenses/yaml-v3.txt', 'licenses/upx.txt',
+            'licenses/sing-rule-generators.txt', 'licenses/domain-list-community.txt'}
 
 
 def package(bundle: Path, output: Path, base_url: str | None, version: str):

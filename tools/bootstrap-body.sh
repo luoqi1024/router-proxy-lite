@@ -36,7 +36,7 @@ cleanup_download() {
                 [ "$(readlink -f "$(dirname "$target")")" = "$(dirname "$target")" ] || continue
                 rm -f "$target" "$target.part"
             done
-            rmdir "$STAGE/bin" "$STAGE/assets" "$STAGE/scripts" "$STAGE" 2>/dev/null || true
+            rmdir "$STAGE/bin" "$STAGE/assets" "$STAGE/scripts" "$STAGE/licenses" "$STAGE" 2>/dev/null || true
         fi;;
     esac
     exit "$code"

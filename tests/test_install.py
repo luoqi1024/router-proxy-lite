@@ -63,6 +63,7 @@ class InstallFlow(unittest.TestCase):
         self.env = dict(os.environ, LAB=str(self.root), PATH=str(self.root/'commands')+':'+os.environ['PATH'])
         self.bundle = self.root / 'bundle'
         shutil.copytree(REPO / 'scripts', self.bundle / 'scripts')
+        shutil.copytree(REPO / 'licenses', self.bundle / 'licenses')
         for p in (self.bundle / 'scripts').iterdir():
             p.write_text(self.map_script(p.read_text()))
         for relative in ['bin/routerlite', 'bin/sing-box']:

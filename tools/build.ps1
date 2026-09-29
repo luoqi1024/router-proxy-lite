@@ -16,11 +16,15 @@ try {
     $name="routerlite-$Target"
     if($Target -eq 'demo'){$env:GOOS='windows';$name='routerlite-demo.exe'}
     New-Item -ItemType Directory -Force dist | Out-Null
-    & $Go build -trimpath '-ldflags=-s -w' -o "dist/$name" ./cmd/routerlite
+    # UPX preserves Go's build ID; go build may otherwise reuse an already packed file.
+    $buildFile="$PWD/dist/$name.build-$([guid]::NewGuid().ToString('N'))"
+    & $Go build -buildvcs=false -trimpath '-ldflags=-s -w' -o $buildFile ./cmd/routerlite
     if($LASTEXITCODE -ne 0){throw 'Build failed'}
+    Copy-Item -LiteralPath $buildFile -Destination "dist/$name" -Force
+    Copy-Item -LiteralPath $buildFile -Destination "dist/$name.raw" -Force
+    Remove-Item -LiteralPath $buildFile
     $raw=(Get-Item "dist/$name").Length
     if($Target -ne 'demo' -and (Test-Path $Upx)){
-        Copy-Item "dist/$name" "dist/$name.raw"
         & $Upx --best --lzma "dist/$name"
         if($LASTEXITCODE -ne 0){throw 'Compression failed'}
         & $Upx -t "dist/$name"

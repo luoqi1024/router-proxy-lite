@@ -59,7 +59,7 @@ if [ "$BUNDLE" = "$ROOT.stage" ]; then
 else
     mkdir -m 700 "$ROOT"
     FILES_CREATED=1
-    cp -R bin assets scripts SHA256SUMS LICENSE THIRD_PARTY.md "$ROOT/"
+    cp -R bin assets scripts licenses SHA256SUMS LICENSE THIRD_PARTY.md "$ROOT/"
 fi
 cd "$ROOT"
 chmod 700 "$ROOT"
