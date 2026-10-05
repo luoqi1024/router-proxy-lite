@@ -101,9 +101,10 @@ func (s *Server) view() View {
 	for _, n := range s.state.Subscription.Nodes {
 		nodes = append(nodes, PublicNode{n.ID, n.Name, n.Type})
 	}
-	return View{Version: Version, Mode: s.mode, Enabled: s.state.Enabled, Running: s.driver.Running(), Policy: s.state.Policy, Selected: s.state.Selected, Nodes: nodes, SubscriptionName: s.state.Subscription.Name, UpdatedAt: s.state.Subscription.UpdatedAt, Warnings: s.state.Subscription.Warnings, Events: s.events, Device: s.device, Failover: s.state.Failover, Health: s.healthView()}
+	return View{Version: Version, Mode: s.mode, Enabled: s.state.Enabled, Running: s.driver.Running(), Policy: s.state.Policy, Selected: s.state.Selected, Nodes: nodes, SubscriptionName: s.state.Subscription.Name, UpdatedAt: s.state.Subscription.UpdatedAt, Warnings: s.state.Subscription.Warnings, Events: s.events, Device: s.device, Failover: s.state.Failover, Health: s.healthView(), Subscriptions: s.publicSubscriptions(), ActiveSubscription: s.state.Subscription.ID, MaxSubscriptions: MaxSubscriptions}
 }
 func (s *Server) commit(ctx context.Context, next State) error {
+	next.normalizeSubscriptions()
 	if err := next.Validate(); err != nil {
 		return err
 	}
@@ -252,6 +253,10 @@ func (s *Server) Handler() http.Handler {
 			s.importSubscription(w, r)
 		case r.URL.Path == "/api/subscription/refresh" && r.Method == "POST":
 			s.refresh(w, r)
+		case r.URL.Path == "/api/subscription/switch" && r.Method == "POST":
+			s.switchSubscription(w, r)
+		case r.URL.Path == "/api/subscription/delete" && r.Method == "POST":
+			s.deleteSubscription(w, r)
 		case r.URL.Path == "/api/settings" && r.Method == "POST":
 			s.settings(w, r)
 		case r.URL.Path == "/api/password" && r.Method == "POST":
@@ -351,21 +356,24 @@ func (s *Server) importData(w http.ResponseWriter, r *http.Request, data []byte,
 		fail(w, 400, err.Error())
 		return
 	}
+	if err = s.saveImportedProfile(r.Context(), nodes, warnings, rawURL, name); err != nil {
+		fail(w, 409, err.Error())
+		return
+	}
+	s.event("订阅已保存")
+	writeJSON(w, 200, s.view())
+}
+func (s *Server) replaceActiveSubscription(ctx context.Context, nodes []Node, warnings []string, rawURL, name string) error {
 	next := s.state
-	next.Subscription = Subscription{URL: rawURL, Name: name, UpdatedAt: time.Now(), Nodes: nodes, Warnings: warnings}
-	if _, err = next.Node(); err != nil {
+	next.Subscription = Subscription{ID: next.Subscription.ID, URL: rawURL, Name: name, UpdatedAt: time.Now().UTC(), Nodes: nodes, Warnings: warnings}
+	if _, err := next.Node(); err != nil {
 		next.Selected = nodes[0].ID
 		next.Enabled = false
 		warnings = append(warnings, "请确认节点后开启代理")
 		next.Subscription.Warnings = warnings
 	}
 	next.pruneFailover()
-	if err = s.commit(r.Context(), next); err != nil {
-		fail(w, 409, err.Error())
-		return
-	}
-	s.event("订阅已导入，节点列表已更新")
-	writeJSON(w, 200, s.view())
+	return s.commit(ctx, next)
 }
 func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 	var body struct{}

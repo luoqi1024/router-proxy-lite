@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const Version = "0.1.0-alpha.1"
+const Version = "0.1.0-alpha.2-dev"
 
 type Node struct {
 	ID       string         `json:"id"`
@@ -19,6 +19,7 @@ type Node struct {
 	Outbound map[string]any `json:"outbound"`
 }
 type Subscription struct {
+	ID        string    `json:"id,omitempty"`
 	URL       string    `json:"url"`
 	Name      string    `json:"name"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -26,12 +27,13 @@ type Subscription struct {
 	Warnings  []string  `json:"warnings,omitempty"`
 }
 type State struct {
-	Schema       int            `json:"schema"`
-	Enabled      bool           `json:"enabled"`
-	Policy       string         `json:"policy"`
-	Selected     string         `json:"selected"`
-	Subscription Subscription   `json:"subscription"`
-	Failover     FailoverConfig `json:"failover"`
+	Schema             int                   `json:"schema"`
+	Enabled            bool                  `json:"enabled"`
+	Policy             string                `json:"policy"`
+	Selected           string                `json:"selected"`
+	Subscription       Subscription          `json:"subscription"`
+	Failover           FailoverConfig        `json:"failover"`
+	SavedSubscriptions []SubscriptionProfile `json:"savedSubscriptions,omitempty"`
 }
 type Event struct {
 	Time    time.Time `json:"time"`
@@ -56,24 +58,27 @@ type PublicNode struct {
 	Type string `json:"type"`
 }
 type View struct {
-	Version          string         `json:"version"`
-	Mode             string         `json:"mode"`
-	Enabled          bool           `json:"enabled"`
-	Running          bool           `json:"running"`
-	Policy           string         `json:"policy"`
-	Selected         string         `json:"selected"`
-	Nodes            []PublicNode   `json:"nodes"`
-	SubscriptionName string         `json:"subscriptionName"`
-	UpdatedAt        time.Time      `json:"updatedAt"`
-	Warnings         []string       `json:"warnings"`
-	Events           []Event        `json:"events"`
-	Device           Device         `json:"device"`
-	Failover         FailoverConfig `json:"failover"`
-	Health           HealthStatus   `json:"health"`
+	Version            string               `json:"version"`
+	Mode               string               `json:"mode"`
+	Enabled            bool                 `json:"enabled"`
+	Running            bool                 `json:"running"`
+	Policy             string               `json:"policy"`
+	Selected           string               `json:"selected"`
+	Nodes              []PublicNode         `json:"nodes"`
+	SubscriptionName   string               `json:"subscriptionName"`
+	UpdatedAt          time.Time            `json:"updatedAt"`
+	Warnings           []string             `json:"warnings"`
+	Events             []Event              `json:"events"`
+	Device             Device               `json:"device"`
+	Failover           FailoverConfig       `json:"failover"`
+	Health             HealthStatus         `json:"health"`
+	Subscriptions      []PublicSubscription `json:"subscriptions"`
+	ActiveSubscription string               `json:"activeSubscription"`
+	MaxSubscriptions   int                  `json:"maxSubscriptions"`
 }
 
 func DefaultState() State {
-	return State{Schema: 1, Policy: "rule", Subscription: Subscription{Nodes: []Node{}}}
+	return State{Schema: 2, Policy: "rule", Subscription: Subscription{Nodes: []Node{}}}
 }
 func (s State) Node() (Node, error) {
 	for _, n := range s.Subscription.Nodes {
@@ -84,6 +89,9 @@ func (s State) Node() (Node, error) {
 	return Node{}, errors.New("请先选择一个可用节点")
 }
 func (s State) Validate() error {
+	if err := s.validateSubscriptions(); err != nil {
+		return err
+	}
 	if err := s.validateFailover(); err != nil {
 		return err
 	}
@@ -141,13 +149,18 @@ func LoadState(dir string) (State, error) {
 	if err = json.Unmarshal(b, &s); err != nil {
 		return s, errors.New("配置文件损坏，请先从备份恢复")
 	}
-	if s.Schema != 1 {
+	if s.Schema != 1 && s.Schema != 2 {
 		return s, errors.New("不支持的配置版本")
 	}
+	s.normalizeSubscriptions()
 	return s, s.Validate()
 }
 func SaveState(dir string, s State) error {
-	b, err := json.MarshalIndent(s, "", "  ")
+	s.normalizeSubscriptions()
+	if err := s.Validate(); err != nil {
+		return err
+	}
+	b, err := json.Marshal(s)
 	if err != nil {
 		return err
 	}

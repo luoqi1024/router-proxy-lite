@@ -32,7 +32,7 @@ func OutboundRegistry() *outbound.Registry {
 }
 func EndpointRegistry() *endpoint.Registry {return endpoint.NewRegistry()}
 func DNSTransportRegistry() *dns.TransportRegistry {
- r:=dns.NewTransportRegistry();transport.RegisterTCP(r);transport.RegisterUDP(r);local.RegisterTransport(r);return r
+ r:=dns.NewTransportRegistry();transport.RegisterTCP(r);transport.RegisterUDP(r);transport.RegisterHTTPS(r);local.RegisterTransport(r);return r
 }
 func ServiceRegistry() *service.Registry {return service.NewRegistry()}
 func CertificateProviderRegistry() *certificate.Registry {return certificate.NewRegistry()}

@@ -250,6 +250,15 @@ func TestConfigAndOptionalRealCoreCheck(t *testing.T) {
 			if json.Unmarshal(b, &config) != nil {
 				t.Fatal("invalid JSON")
 			}
+			dns := config["dns"].(map[string]any)
+			remote := dns["servers"].([]any)[1].(map[string]any)
+			if remote["type"] != "https" || remote["server"] != "1.1.1.1" || remote["detour"] != "proxy" || remote["server_port"] != float64(443) || dns["final"] != "proxy-dns" {
+				t.Fatal("foreign DNS must use HTTPS through selected proxy")
+			}
+			tls := remote["tls"].(map[string]any)
+			if tls["enabled"] != true || tls["server_name"] != "cloudflare-dns.com" || tls["insecure"] == true {
+				t.Fatal("DoH TLS validation missing")
+			}
 			rules := config["route"].(map[string]any)["rules"].([]any)
 			if policy == "rule" && len(rules) != 6 || policy == "global" && len(rules) != 4 {
 				t.Fatal("unexpected policy rules")

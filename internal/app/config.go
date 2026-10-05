@@ -27,7 +27,7 @@ func RenderConfig(s State, d Device, assets string) ([]byte, error) {
 	config := map[string]any{
 		"log":         map[string]any{"level": "warn", "timestamp": true},
 		"certificate": map[string]any{"certificate_path": []string{filepath.Join(assets, "ca-certificates.crt")}},
-		"dns":         map[string]any{"servers": []any{map[string]any{"type": "udp", "tag": "local-dns", "server": "223.5.5.5"}, map[string]any{"type": "tcp", "tag": "proxy-dns", "server": "8.8.8.8", "detour": "proxy"}}, "rules": dnsRules, "final": "proxy-dns", "strategy": "ipv4_only", "cache_capacity": 512, "reverse_mapping": true},
+		"dns":         map[string]any{"servers": []any{map[string]any{"type": "udp", "tag": "local-dns", "server": "223.5.5.5"}, map[string]any{"type": "https", "tag": "proxy-dns", "server": "1.1.1.1", "server_port": 443, "path": "/dns-query", "tls": map[string]any{"enabled": true, "server_name": "cloudflare-dns.com"}, "detour": "proxy"}}, "rules": dnsRules, "final": "proxy-dns", "strategy": "ipv4_only", "cache_capacity": 512, "reverse_mapping": true},
 		"inbounds": []any{
 			map[string]any{"type": "mixed", "tag": "health", "listen": "127.0.0.1", "listen_port": 17890},
 			map[string]any{"type": "direct", "tag": "dns-in", "listen": d.LANAddress, "listen_port": 1053},
