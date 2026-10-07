@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -41,9 +42,28 @@ def verify(source, work, go):
         ('routerlite', source/'routerlite', [], '-s -w'),
         ('sing-box', core, ['-tags', 'with_utls'], '-s -w -X github.com/sagernet/sing-box/constant.Version=1.14.2-routerlite')]):
         target = work/(name+'.raw')
+        entrypoint = './cmd/'+name
+        if name == 'sing-box':
+            build = manifest['binaries'][index]['build']
+            settings = {s['Key']: s['Value'] for s in build.get('Settings', [])}
+            path = build.get('Path', '')
+            if path not in ('github.com/sagernet/sing-box/cmd/sing-box', 'github.com/sagernet/sing-box/cmd/routerlite-core'):
+                raise ValueError('Unsupported core entrypoint')
+            if path.endswith('/routerlite-core'):
+                entrypoint = './cmd/routerlite-core'
+                profile = 'native-small' if settings.get('-gcflags') == 'all=-l' else 'slim-cli'
+                ldflags += '-'+profile
+            ldflags = settings.get('-ldflags', ldflags)
+            if not re.fullmatch(r'-s -w -X github.com/sagernet/sing-box/constant.Version=1\.14\.2-routerlite(?:-slim-cli|-native-small)?', ldflags):
+                raise ValueError('Unsupported core version flags')
+            gcflags = settings.get('-gcflags', '')
+            if gcflags not in ('', 'all=-l'):
+                raise ValueError('Unsupported core compiler flags')
+            if gcflags:
+                extra = extra + ['-gcflags='+gcflags]
         with (work/(name+'.log')).open('wb') as log:
             subprocess.run([str(go), 'build', '-buildvcs=false', '-trimpath', *extra,
-                            '-ldflags='+ldflags, '-o', str(target), './cmd/'+name],
+                            '-ldflags='+ldflags, '-o', str(target), entrypoint],
                            cwd=directory, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
         digest = hashlib.sha256(target.read_bytes()).hexdigest()
         if digest != manifest['binaries'][index]['sha256']:

@@ -2,6 +2,8 @@
 # Shared first-install checks. Also embedded in the generated download entrypoint.
 rpl_die() { printf '%s\n' "RouterLite: $*" >&2; exit 1; }
 rpl_probe() {
+    RPL_MEMORY_PROFILE=${RPL_MEMORY_PROFILE:-standard}
+    case "$RPL_MEMORY_PROFILE" in standard|compact) :;; *) rpl_die '未知内存模式。';; esac
     [ "$(id -u)" = 0 ] || rpl_die '请使用 root 通过 SSH 安装。'
     [ "$(uname -s)" = Linux ] || rpl_die '当前仅支持 Linux 路由器。'
     case "$(uname -m)" in armv7l|armv7) :;; *) rpl_die '当前安装包仅支持 ARMv7；其他架构尚未提供经过验证的包。';; esac
@@ -34,7 +36,18 @@ rpl_probe() {
     done
     mem=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)
     case "$mem" in ''|*[!0-9]*) rpl_die '无法读取可用内存。';; esac
-    [ "$mem" -ge 65536 ] || rpl_die "可用内存 ${mem} KiB，安装至少需要 65536 KiB；请先停止旧代理。"
+    minimum=65536
+    if [ "$RPL_MEMORY_PROFILE" = compact ]; then
+        minimum=32768
+        total=$(awk '/MemTotal:/ {print $2}' /proc/meminfo)
+        case "$total" in ''|*[!0-9]*) rpl_die '无法读取总内存。';; esac
+        [ "$total" -ge 131072 ] || rpl_die '紧凑模式至少需要 128 MiB 总内存。'
+    fi
+    [ "$mem" -ge "$minimum" ] || rpl_die "可用内存 ${mem} KiB，当前模式安装至少需要 ${minimum} KiB；不会继续安装。"
+    if [ "$RPL_MEMORY_PROFILE" = compact ]; then
+        [ -n "${BUNDLE:-}" ] || rpl_die '紧凑模式仅支持可信的离线 native-small 安装包。'
+        case "$("$BUNDLE/bin/sing-box" version 2>/dev/null)" in *1.14.2-routerlite-native-small*) :;; *) rpl_die '紧凑模式需要经过校验的 native-small 内核包。';; esac
+    fi
 }
 rpl_storage_ok() {
     parent=$1

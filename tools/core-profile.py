@@ -38,3 +38,12 @@ func ServiceRegistry() *service.Registry {return service.NewRegistry()}
 func CertificateProviderRegistry() *certificate.Registry {return certificate.NewRegistry()}
 '''
 (root / 'include/registry.go').write_text(code, encoding='utf-8', newline='\n')
+
+# Keep upstream startup, shutdown, parsing and validation code unchanged. The
+# router manager only calls run/check/version; omit unrelated CLI/API tooling.
+minimal_cli = root / 'cmd/routerlite-core'
+minimal_cli.mkdir(exist_ok=True)
+for name in ('main.go', 'cmd.go', 'cmd_run.go', 'cmd_run_userns_linux.go',
+             'cmd_run_userns_other.go', 'cmd_netns_holder.go',
+             'cmd_check.go', 'cmd_version.go'):
+    (minimal_cli / name).write_bytes((root / 'cmd/sing-box' / name).read_bytes())

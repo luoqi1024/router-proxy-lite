@@ -6,9 +6,16 @@ ROOT=$(readlink -f "$initscript")
 ROOT=${ROOT%/scripts/routerlite.init}
 case "$ROOT" in /data/routerlite|/overlay/routerlite) :;; *) return 1;; esac
 start_service() {
+    memory_profile=standard
+    if [ -f "$ROOT/state/memory-profile" ]; then memory_profile=$(cat "$ROOT/state/memory-profile"); fi
+    case "$memory_profile" in
+        standard) gc=50; memory_limit=24MiB; procs=2;;
+        compact) gc=25; memory_limit=8MiB; procs=1;;
+        *) return 1;;
+    esac
     procd_open_instance
     procd_set_param command "$ROOT/scripts/run.sh"
-    procd_set_param env SSL_CERT_FILE="$ROOT/assets/ca-certificates.crt" GOGC=50 GOMEMLIMIT=24MiB GOMAXPROCS=2
+    procd_set_param env SSL_CERT_FILE="$ROOT/assets/ca-certificates.crt" RPL_MEMORY_PROFILE="$memory_profile" GOGC="$gc" GOMEMLIMIT="$memory_limit" GOMAXPROCS="$procs"
     procd_set_param respawn 3600 10 5
     procd_set_param term_timeout 20
     procd_set_param stdout 0

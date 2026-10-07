@@ -64,6 +64,10 @@ fi
 cd "$ROOT"
 chmod 700 "$ROOT"
 mkdir -m 700 "$ROOT/state"
+if [ "${RPL_MEMORY_PROFILE:-standard}" = compact ]; then
+    printf '%s\n' compact > "$ROOT/state/memory-profile"
+    chmod 600 "$ROOT/state/memory-profile"
+fi
 chmod 755 "$ROOT"/bin/* "$ROOT"/scripts/*.sh "$ROOT/scripts/routerlite.init"
 ln -s "$ROOT/scripts/routerlite.init" /etc/init.d/routerlite
 SERVICE_CREATED=1

@@ -112,6 +112,30 @@ esac
         entry.write_text(self.map_script(entry.read_text()))
         return entry
 
+    def test_compact_mode_is_explicit_and_requires_native_core(self):
+        (self.root/'proc/meminfo').write_text('MemTotal: 182868 kB\nMemAvailable: 40000 kB\n')
+        self.assertNotEqual(self.run_setup('--check').returncode, 0)
+        result = self.run_setup('--check', '--memory-profile', 'compact')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('native-small', result.stderr)
+        core = self.bundle/'bin/sing-box'
+        core.write_text('#!/bin/sh\necho "sing-box version 1.14.2-routerlite-native-small"\n')
+        self.manifest()
+        self.assertEqual(self.run_setup('--check', '--memory-profile', 'compact').returncode, 0)
+        self.assertFalse((self.root/'data/routerlite').exists())
+        result = self.run_setup('--memory-profile', 'compact')
+        self.assertEqual(result.returncode, 0, result.stderr+result.stdout)
+        self.assertEqual((self.root/'data/routerlite/state/memory-profile').read_text().strip(), 'compact')
+
+    def test_compact_mode_rejects_insufficient_ram(self):
+        for total, available in [(182868, 24000), (65536, 40000)]:
+            with self.subTest(total=total, available=available):
+                (self.root/'proc/meminfo').write_text(f'MemTotal: {total} kB\nMemAvailable: {available} kB\n')
+                self.assertNotEqual(self.run_setup('--memory-profile', 'compact').returncode, 0)
+                self.assertFalse((self.root/'data/routerlite').exists())
+                self.assertFalse((self.root/'service.log').exists())
+        self.assertNotEqual(self.run_setup('--memory-profile', 'unknown').returncode, 0)
+
     def test_offline_install_starts_ui_and_enables_boot(self):
         result = self.run_setup()
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)

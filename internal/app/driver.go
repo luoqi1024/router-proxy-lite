@@ -92,7 +92,7 @@ func (d *RouterDriver) launchLocked(ctx context.Context, s State) error {
 	}
 	cmd := exec.Command(d.Core, "run", "-c", path)
 	configureChild(cmd)
-	cmd.Env = append(os.Environ(), "GOGC=50", "GOMEMLIMIT=32MiB", "GOMAXPROCS=2")
+	cmd.Env = coreRuntimeEnv(false)
 	// Provider messages can include server addresses. Never expose raw core output in the UI.
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
@@ -188,7 +188,7 @@ func (d *RouterDriver) Apply(ctx context.Context, s State) error {
 		cctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(cctx, d.Core, "check", "-c", tmp)
-		cmd.Env = append(os.Environ(), "GOGC=50", "GOMEMLIMIT=16MiB", "GOMAXPROCS=2")
+		cmd.Env = coreRuntimeEnv(true)
 		if err := cmd.Run(); err != nil {
 			return errors.New("内核配置检查失败")
 		}
@@ -214,6 +214,24 @@ func (d *RouterDriver) Apply(ctx context.Context, s State) error {
 }
 func (d *RouterDriver) Running() bool { d.mu.Lock(); defer d.mu.Unlock(); return d.current != nil }
 func (d *RouterDriver) Close() error  { d.mu.Lock(); defer d.mu.Unlock(); return d.stopLocked() }
+
+func coreRuntimeEnv(check bool) []string {
+	gc, limit, procs := "50", "32MiB", "2"
+	if check {
+		limit = "16MiB"
+	}
+	if os.Getenv("RPL_MEMORY_PROFILE") == "compact" {
+		gc, limit, procs = "25", "12MiB", "1"
+	}
+	env := []string{}
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if name != "GOGC" && name != "GOMEMLIMIT" && name != "GOMAXPROCS" {
+			env = append(env, entry)
+		}
+	}
+	return append(env, "GOGC="+gc, "GOMEMLIMIT="+limit, "GOMAXPROCS="+procs)
+}
 
 func DemoDevice() Device {
 	return Device{Mode: "demo", Architecture: runtime.GOARCH, LAN: "演示局域网", WAN: "演示上联网口", LANAddress: "192.168.31.1", Checks: []Check{{"电脑演示模式", true, "不会启动内核或修改任何网络规则"}}}

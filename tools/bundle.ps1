@@ -1,4 +1,4 @@
-param([string]$Assets="$PSScriptRoot/../.local/assets-pinned", [string]$BundleName='routerlite-armv7-preview')
+param([string]$Assets="$PSScriptRoot/../.local/assets-pinned", [string]$BundleName='routerlite-armv7-preview', [string]$Core="$PSScriptRoot/../dist/routerlite-core-armv7")
 $ErrorActionPreference='Stop'
 $root=(Resolve-Path "$PSScriptRoot/..").Path
 if($BundleName -notmatch '^[a-zA-Z0-9_-]+$'){throw 'Invalid bundle name'}
@@ -9,7 +9,7 @@ if($LASTEXITCODE -ne 0){throw 'Pinned resource verification failed; run python t
 foreach($file in @('ca-certificates.crt','geosite-cn.srs','geoip-cn.srs')){if(!(Test-Path "$Assets/$file")){throw "Missing asset: $file"}}
 New-Item -ItemType Directory -Force "$bundle/bin","$bundle/assets","$bundle/scripts" | Out-Null
 Copy-Item "$root/dist/routerlite-armv7" "$bundle/bin/routerlite"
-Copy-Item "$root/dist/routerlite-core-armv7" "$bundle/bin/sing-box"
+Copy-Item -LiteralPath $Core -Destination "$bundle/bin/sing-box"
 Copy-Item "$Assets/ca-certificates.crt","$Assets/geosite-cn.srs","$Assets/geoip-cn.srs" "$bundle/assets/"
 Copy-Item "$root/scripts/*" "$bundle/scripts/"
 Copy-Item "$root/THIRD_PARTY.md","$root/LICENSE" "$bundle/"
