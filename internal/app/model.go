@@ -19,12 +19,13 @@ type Node struct {
 	Outbound map[string]any `json:"outbound"`
 }
 type Subscription struct {
-	ID        string    `json:"id,omitempty"`
-	URL       string    `json:"url"`
-	Name      string    `json:"name"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Nodes     []Node    `json:"nodes"`
-	Warnings  []string  `json:"warnings,omitempty"`
+	ID         string    `json:"id,omitempty"`
+	URL        string    `json:"url"`
+	NodeFilter string    `json:"nodeFilter,omitempty"`
+	Name       string    `json:"name"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+	Nodes      []Node    `json:"nodes"`
+	Warnings   []string  `json:"warnings,omitempty"`
 }
 type State struct {
 	Schema             int                   `json:"schema"`

@@ -8,13 +8,13 @@ RouterLite 面向已解锁 SSH 的原厂固件路由器。安装后，导入订�
 
 > 首个公开版本 **[v0.1.0-alpha.1](https://github.com/luoqi1024/router-proxy-lite/releases/tag/v0.1.0-alpha.1)** 已提供 ARMv7 安装包。目前仅在小米 AX1800 原厂固件上完成部分实机验证，属于 Alpha 预览版；整机重启、长期稳定性和其他型号仍待验证。
 
-`main` 当前为 **v0.1.0-alpha.2-dev**，增加了三套订阅和 HTTPS DNS，尚未发布安装包。下面的安装命令仍指向 Alpha 1，该包保存一套订阅，国外 DNS 使用 TCP；新版说明见 [订阅管理](docs/SUBSCRIPTIONS.md)。
+`main` 当前为 **v0.1.0-alpha.2-dev**，增加了三套订阅、HTTPS DNS、节点名称筛选和一次性链接导入，尚未发布安装包。下面的安装命令仍指向 Alpha 1，该包保存一套订阅，国外 DNS 使用 TCP；新版说明见 [订阅管理](docs/SUBSCRIPTIONS.md)。
 
 ## 能做什么
 
 - **导入订阅**：支持 Clash / Mihomo 格式的订阅链接，也可以直接粘贴配置内容，在路由器本地解析。
 - **保存多套订阅（开发版）**：最多三套，手动切换，分别记住节点和备用名单。新增订阅先保存，当前代理继续使用原订阅。
-- **选择节点**：支持 AnyTLS、Shadowsocks（无插件）、Trojan、VLESS 和 VMess。不支持的节点或配置会在导入时提示。
+- **选择节点**：支持 AnyTLS、Shadowsocks、Trojan、VLESS 和 VMess。开发版另支持 Shadowsocks 的 `obfs` 插件（HTTP / TLS 模式）；其他插件仍会被跳过。
 - **故障自动切换**：选择当前节点和备用节点，共 2–5 个。当前节点连续连接失败后，自动尝试名单中的可用节点。
 - **网页管理**：手机和电脑都能使用，提供代理开关、节点选择、密码修改和操作记录。
 

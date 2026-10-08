@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -110,6 +111,18 @@ func FetchSubscription(ctx context.Context, raw string) ([]byte, error) {
 }
 
 func ParseSubscription(data []byte) ([]Node, []string, error) {
+	return parseSubscription(data, "")
+}
+
+func validNodeFilter(filter string) bool {
+	return len(filter) <= 256 && strings.IndexFunc(filter, unicode.IsControl) < 0
+}
+
+func parseSubscription(data []byte, filter string) ([]Node, []string, error) {
+	filter = strings.TrimSpace(filter)
+	if !validNodeFilter(filter) {
+		return nil, nil, errors.New("节点筛选需为不超过 256 字节的名称文字")
+	}
 	if len(data) > MaxSubscriptionBytes {
 		return nil, nil, errors.New("订阅过大")
 	}
@@ -121,6 +134,18 @@ func ParseSubscription(data []byte) ([]Node, []string, error) {
 	}
 	if len(doc.Proxies) == 0 {
 		return nil, nil, errors.New("没有找到 Clash 节点；暂不支持 URI/Base64 或 sing-box 订阅")
+	}
+	if filter != "" {
+		matched := []map[string]any{}
+		for _, p := range doc.Proxies {
+			if strings.Contains(text(p, "name"), filter) {
+				matched = append(matched, p)
+			}
+		}
+		doc.Proxies = matched
+		if len(doc.Proxies) == 0 {
+			return nil, nil, errors.New("没有找到名称包含该文字的节点，原有订阅未改变")
+		}
 	}
 	if len(doc.Proxies) > MaxNodes {
 		return nil, nil, errors.New("节点超过 512 个，请使用精简订阅")
@@ -167,14 +192,34 @@ func convertNode(p map[string]any) (Node, error) {
 		out["type"] = "anytls"
 		out["password"] = text(p, "password")
 	case "ss":
-		if text(p, "plugin") != "" {
-			return Node{}, errors.New("暂不支持插件")
-		}
 		out["type"] = "shadowsocks"
 		out["method"] = text(p, "cipher")
 		out["password"] = text(p, "password")
 		if text(p, "cipher") == "" {
 			return Node{}, errors.New("缺少加密方式")
+		}
+		if plugin, exists := p["plugin"]; exists && plugin != "" && plugin != nil {
+			if plugin != "obfs" {
+				return Node{}, errors.New("此插件尚未支持；当前仅支持 obfs")
+			}
+			opts, ok := p["plugin-opts"].(map[string]any)
+			if !ok {
+				return Node{}, errors.New("缺少 obfs 配置")
+			}
+			mode, host := text(opts, "mode"), text(opts, "host")
+			if mode != "http" && mode != "tls" {
+				return Node{}, errors.New("obfs 模式需为 http 或 tls")
+			}
+			if host == "" || len(host) > 255 || strings.ContainsAny(host, " ;=\\") || strings.IndexFunc(host, unicode.IsControl) >= 0 {
+				return Node{}, errors.New("obfs host 无效")
+			}
+			for key := range opts {
+				if key != "mode" && key != "host" {
+					return Node{}, errors.New("存在尚未支持的 obfs 选项")
+				}
+			}
+			out["plugin"] = "obfs-local"
+			out["plugin_opts"] = "obfs=" + mode + ";obfs-host=" + host
 		}
 	case "trojan":
 		out["type"] = "trojan"

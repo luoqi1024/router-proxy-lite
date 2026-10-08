@@ -26,6 +26,7 @@ type PublicSubscription struct {
 	Name       string `json:"name"`
 	NodeCount  int    `json:"nodeCount"`
 	CanRefresh bool   `json:"canRefresh"`
+	NodeFilter string `json:"nodeFilter,omitempty"`
 }
 
 func (s *State) normalizeSubscriptions() {
@@ -52,6 +53,9 @@ func (s State) subscriptionCount() int {
 }
 
 func (s State) validateSubscriptions() error {
+	if !validNodeFilter(s.Subscription.NodeFilter) {
+		return errors.New("节点筛选无效")
+	}
 	if len(s.Subscription.Nodes) > MaxNodes {
 		return errors.New("节点超过 512 个")
 	}
@@ -66,6 +70,9 @@ func (s State) validateSubscriptions() error {
 		seen[s.Subscription.ID] = true
 	}
 	for _, p := range s.SavedSubscriptions {
+		if !validNodeFilter(p.Subscription.NodeFilter) {
+			return errors.New("保存的节点筛选无效")
+		}
 		if p.Subscription.ID == "" || seen[p.Subscription.ID] || len(p.Subscription.Nodes) == 0 || len(p.Subscription.Nodes) > MaxNodes {
 			return errors.New("保存的订阅配置无效")
 		}
@@ -99,7 +106,7 @@ func newSubscriptionID() (string, error) {
 func (s *Server) publicSubscriptions() []PublicSubscription {
 	result := []PublicSubscription{}
 	add := func(p Subscription) {
-		result = append(result, PublicSubscription{p.ID, p.Name, len(p.Nodes), p.URL != ""})
+		result = append(result, PublicSubscription{ID: p.ID, Name: p.Name, NodeCount: len(p.Nodes), CanRefresh: p.URL != "", NodeFilter: p.NodeFilter})
 	}
 	if len(s.state.Subscription.Nodes) != 0 {
 		add(s.state.Subscription)
@@ -196,18 +203,18 @@ func (s *Server) deleteSubscription(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, s.view())
 }
 
-func (s *Server) saveImportedProfile(ctx context.Context, nodes []Node, warnings []string, rawURL, name string) error {
+func (s *Server) saveImportedProfile(ctx context.Context, nodes []Node, warnings []string, rawURL, name, filter string) error {
 	next := s.state
 	next.SavedSubscriptions = append([]SubscriptionProfile(nil), s.state.SavedSubscriptions...)
 	// Re-importing the same URL updates that profile without consuming a slot.
 	if rawURL != "" && rawURL == next.Subscription.URL && len(next.Subscription.Nodes) != 0 {
-		return s.replaceActiveSubscription(ctx, nodes, warnings, rawURL, name)
+		return s.replaceActiveSubscription(ctx, nodes, warnings, rawURL, name, filter)
 	}
 	for i, p := range next.SavedSubscriptions {
 		if rawURL == "" || rawURL != p.Subscription.URL {
 			continue
 		}
-		p.Subscription = Subscription{ID: p.Subscription.ID, URL: rawURL, Name: name, UpdatedAt: time.Now().UTC(), Nodes: nodes, Warnings: warnings}
+		p.Subscription = Subscription{ID: p.Subscription.ID, URL: rawURL, Name: name, NodeFilter: filter, UpdatedAt: time.Now().UTC(), Nodes: nodes, Warnings: warnings}
 		check := State{Subscription: p.Subscription, Selected: p.Selected, Failover: p.Failover}
 		if _, err := check.Node(); err != nil {
 			check.Selected = nodes[0].ID
@@ -224,7 +231,7 @@ func (s *Server) saveImportedProfile(ctx context.Context, nodes []Node, warnings
 	if err != nil {
 		return err
 	}
-	p := SubscriptionProfile{Subscription: Subscription{ID: id, URL: rawURL, Name: name, UpdatedAt: time.Now().UTC(), Nodes: nodes, Warnings: warnings}, Selected: nodes[0].ID}
+	p := SubscriptionProfile{Subscription: Subscription{ID: id, URL: rawURL, Name: name, NodeFilter: filter, UpdatedAt: time.Now().UTC(), Nodes: nodes, Warnings: warnings}, Selected: nodes[0].ID}
 	if len(next.Subscription.Nodes) == 0 {
 		next.activateProfile(p)
 		next.Enabled = false

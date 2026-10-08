@@ -317,9 +317,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) importSubscription(w http.ResponseWriter, r *http.Request) {
 	var b struct {
-		URL     string `json:"url"`
-		Name    string `json:"name"`
-		Content string `json:"content"`
+		URL        string `json:"url"`
+		Name       string `json:"name"`
+		Content    string `json:"content"`
+		NodeFilter string `json:"nodeFilter"`
+		OneTime    bool   `json:"oneTime"`
 	}
 	if !readBody(w, r, &b) {
 		return
@@ -330,6 +332,11 @@ func (s *Server) importSubscription(w http.ResponseWriter, r *http.Request) {
 	}
 	if b.Name == "" {
 		b.Name = "我的订阅"
+	}
+	b.NodeFilter = strings.TrimSpace(b.NodeFilter)
+	if !validNodeFilter(b.NodeFilter) {
+		fail(w, 400, "节点筛选需为不超过 256 字节的名称文字")
+		return
 	}
 	if b.URL != "" && b.Content != "" {
 		fail(w, 400, "请选择链接或配置内容其中一种")
@@ -348,24 +355,28 @@ func (s *Server) importSubscription(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, err.Error())
 		return
 	}
-	s.importData(w, r, data, b.URL, b.Name)
+	sourceURL := b.URL
+	if b.OneTime {
+		sourceURL = ""
+	}
+	s.importData(w, r, data, sourceURL, b.Name, b.NodeFilter)
 }
-func (s *Server) importData(w http.ResponseWriter, r *http.Request, data []byte, rawURL, name string) {
-	nodes, warnings, err := ParseSubscription(data)
+func (s *Server) importData(w http.ResponseWriter, r *http.Request, data []byte, rawURL, name, filter string) {
+	nodes, warnings, err := parseSubscription(data, filter)
 	if err != nil {
 		fail(w, 400, err.Error())
 		return
 	}
-	if err = s.saveImportedProfile(r.Context(), nodes, warnings, rawURL, name); err != nil {
+	if err = s.saveImportedProfile(r.Context(), nodes, warnings, rawURL, name, filter); err != nil {
 		fail(w, 409, err.Error())
 		return
 	}
 	s.event("订阅已保存")
 	writeJSON(w, 200, s.view())
 }
-func (s *Server) replaceActiveSubscription(ctx context.Context, nodes []Node, warnings []string, rawURL, name string) error {
+func (s *Server) replaceActiveSubscription(ctx context.Context, nodes []Node, warnings []string, rawURL, name, filter string) error {
 	next := s.state
-	next.Subscription = Subscription{ID: next.Subscription.ID, URL: rawURL, Name: name, UpdatedAt: time.Now().UTC(), Nodes: nodes, Warnings: warnings}
+	next.Subscription = Subscription{ID: next.Subscription.ID, URL: rawURL, Name: name, NodeFilter: filter, UpdatedAt: time.Now().UTC(), Nodes: nodes, Warnings: warnings}
 	if _, err := next.Node(); err != nil {
 		next.Selected = nodes[0].ID
 		next.Enabled = false
@@ -396,7 +407,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, err.Error())
 		return
 	}
-	s.importData(w, r, data, raw, s.state.Subscription.Name)
+	s.importData(w, r, data, raw, s.state.Subscription.Name, s.state.Subscription.NodeFilter)
 }
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
