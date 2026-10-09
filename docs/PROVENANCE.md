@@ -14,6 +14,12 @@
 
 构建脚本使用 `-trimpath -buildvcs=false`，保留 `.raw` 原始二进制后执行 UPX。每次编译到新文件，避免 Go build ID 导致复用已压缩的产物。
 
+### 低内存 Linux 的 Go 兼容覆盖
+
+`tools/go-compat-overlay.py` 对固定 Go 1.27.1 的 `crypto/internal/fips140/drbg/entropy_fips140.go` 校验 SHA256，并生成 `go build -overlay` 文件；不改动已安装的 Go 工具链。覆盖将 32 MiB 的静态熵源工作区改成 `sync.OnceValue` 首次使用时分配，保留完整工作区大小和熵源算法。默认非 FIPS 路径仍使用操作系统随机源，TLS 证书验证保持开启。此构建不宣称 FIPS 模块认证；缓冲区是启动时的提交预留，不代表原来的程序实际驻留了 32 MiB。
+
+背景为 [Go 上游问题 #81505](https://github.com/golang/go/issues/81505)。低内存 Linux 可以在 ELF 装载时拒绝静态 BSS 提交，导致 main 之前退出；仅设置 `GOFIPS140=off` 或压缩文件不能去掉该预留。遇到未知 Go 源码哈希时生成器拒绝继续，维护者须审核后更新，而非盲目套用。管理程序和精简内核都使用这份覆盖；对应源码重建必须复用它。
+
 ## 生成规则
 
 `rules.lock.json` 固定两份原始数据的公开地址、字节数、SHA256 和署名。IP 输入是 DB-IP Lite 的固定镜像快照，采用 CC BY 4.0；域名输入是固定提交的 domain-list-community，采用 MIT。规则转换工具核对输入后才运行；不会在路由器上下载大数据库。
@@ -43,7 +49,7 @@ CA 下载地址和哈希见 `assets.lock.json`。资源目录里的三个文件�
 先确认所有新源文件已提交，再从实际原始二进制生成对应源码包：
 
 ```powershell
-python tools/source-bundle.py --module-cache .local/gopath/pkg/mod --rule-inputs .local/rule-inputs --output dist/routerlite-source.tar.gz
+python tools/source-bundle.py --module-cache .local/gopath/pkg/mod --rule-inputs .local/rule-inputs --go-overlay .local/go-compat/overlay.json --output dist/routerlite-source.tar.gz
 ```
 
 可多次指定 `--module-cache`。工具按二进制真实 Go 模块信息收集依赖，逐 ZIP 计算 `h1` 并比对；归档包含模块代理、原始内核、项目源码、构建脚本、规则原始输入、清单和哈希。未提交的工作区会标记 dirty，不得作为已提交版本的发布源码。

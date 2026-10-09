@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -51,8 +50,12 @@ func (d *RouterDriver) network(action string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "/bin/sh", filepath.Join(d.Scripts, "network.sh"), action)
+	configureNetworkChild(cmd)
 	cmd.Env = append(os.Environ(), "RPL_LAN="+d.Device.LAN, "RPL_DATA="+d.DataDir)
+	output := newDiagnosticTail(4096)
+	cmd.Stdout, cmd.Stderr = output, output
 	if err := cmd.Run(); err != nil {
+		d.recordDiagnostic("network "+action, err, output.Bytes())
 		return errors.New("网络规则操作失败；请查看诊断记录")
 	}
 	return nil
@@ -95,24 +98,14 @@ func (d *RouterDriver) launchLocked(ctx context.Context, s State) error {
 	configureChild(cmd)
 	cmd.Env = coreRuntimeEnv(false)
 	releaseCoreHeadroom()
-	// Provider messages can include server addresses. Never expose raw core output in the UI.
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	if err = cmd.Start(); err != nil {
+	// Raw output stays bounded and private; it is never returned by the API.
+	output := newDiagnosticTail(16 << 10)
+	cmd.Stdout, cmd.Stderr = output, output
+	p, err := d.startCore(cmd, output)
+	if err != nil {
 		return errors.New("代理内核启动失败")
 	}
-	p := &child{cmd: cmd, done: make(chan struct{})}
 	d.current = p
-	go func() {
-		_ = cmd.Wait()
-		close(p.done)
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		if d.current == p {
-			d.current = nil
-			_ = d.network("stop")
-		}
-	}()
 	ready := false
 	for until := time.Now().Add(10 * time.Second); time.Now().Before(until); {
 		select {
@@ -191,8 +184,11 @@ func (d *RouterDriver) Apply(ctx context.Context, s State) error {
 		defer cancel()
 		cmd := exec.CommandContext(cctx, d.Core, "check", "-c", tmp)
 		cmd.Env = coreRuntimeEnv(true)
+		output := newDiagnosticTail(4096)
+		cmd.Stdout, cmd.Stderr = output, output
 		releaseCoreHeadroom()
 		if err := cmd.Run(); err != nil {
+			d.recordDiagnostic("core check", err, output.Bytes())
 			return errors.New("内核配置检查失败")
 		}
 		return nil
@@ -255,7 +251,7 @@ func ProbeRouter(lan, wan, core, assets string) Device {
 	add("管理员权限", os.Geteuid() == 0, "需要 root 权限")
 	_, err := os.Stat("/dev/net/tun")
 	add("TUN", err == nil, "需要 /dev/net/tun")
-	for _, name := range []string{"ip", "iptables"} {
+	for _, name := range []string{"ip", "iptables", "flock"} {
 		_, err = exec.LookPath(name)
 		add(name, err == nil, "需要系统已有的网络命令")
 	}

@@ -10,7 +10,7 @@
 | 小米 AX3000（RA81） | 原厂系统 / OpenWrt 18.06 衍生组件 | ARMv7 / IPQ5018 / Linux 4.4.60 | 紧凑开发包离线首次安装、服务重启与内核组合测试通过；客户端启用待验收 |
 | 其他型号 / ARM64 / MIPS | 未验证 | 未验证 | 暂不提供完整安装包支持承诺 |
 
-测试使用原厂固件，无需重新分区。安装依赖 root、BusyBox、procd、iptables、TUN、IPv4 转发、策略路由和 `br-lan`。原厂系统带有 OpenWrt 衍生组件，不等于支持任意标准 OpenWrt 插件。
+测试使用原厂固件，无需重新分区。安装依赖 root、BusyBox、procd、iptables、flock、TUN、IPv4 转发、策略路由和 `br-lan`。原厂系统带有 OpenWrt 衍生组件，不等于支持任意标准 OpenWrt 插件。
 
 ## 已验证功能
 

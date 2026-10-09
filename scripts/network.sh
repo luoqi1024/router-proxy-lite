@@ -8,11 +8,15 @@ PREF=10820
 MASK=0x40000000
 MARK=$MASK/$MASK
 OWNER=$DATA/network.owner
-LOCK=/tmp/routerlite-network.lock
+LOCK=/tmp/routerlite-network.flock
 case "$LAN" in ''|*[!a-zA-Z0-9_.:-]*) echo 'Invalid LAN interface' >&2; exit 2;; esac
 [ "$(id -u)" = 0 ] || { echo 'root required' >&2; exit 1; }
-mkdir "$LOCK" 2>/dev/null || { echo 'Network operation already running' >&2; exit 1; }
-trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+# Keep the inode: unlinking a flock file lets another process lock a new inode.
+# The kernel releases this lock even if the shell is killed before an EXIT trap.
+command -v flock >/dev/null || { echo 'flock is required for safe network operations' >&2; exit 1; }
+umask 077
+exec 9>"$LOCK"
+flock -n 9 || { echo 'Network operation already running' >&2; exit 1; }
 
 preflight() {
     command -v ip >/dev/null
@@ -77,7 +81,7 @@ start_network() {
     chmod 700 "$DATA"
     umask 077
     printf '%s\n' "$LAN" > "$OWNER"
-    trap 'stop_network; rmdir "$LOCK" 2>/dev/null || true' EXIT
+    trap 'stop_network' EXIT
     ip -4 route add default dev rpltun table "$TABLE"
     for subnet in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4; do
         ip -4 route add throw "$subnet" table "$TABLE"
@@ -95,7 +99,7 @@ start_network() {
     ip -4 rule add pref "$PREF" fwmark "$MARK" iif "$LAN" lookup "$TABLE"
     iptables -t nat -I PREROUTING 1 -i "$LAN" -j RPL_DNS
     iptables -t mangle -I PREROUTING 1 -i "$LAN" -j RPL_MARK
-    trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+    trap - EXIT
 }
 
 case "${1:-}" in

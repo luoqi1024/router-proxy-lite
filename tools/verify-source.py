@@ -38,6 +38,17 @@ def verify(source, work, go):
                GOPATH=str(work/'gopath'), GOMODCACHE=str(work/'gopath/pkg/mod'),
                GOCACHE=str(work/'gocache'), CGO_ENABLED='0', GOOS='linux', GOARCH='arm', GOARM='7')
     result = {}
+    compatibility_flags = []
+    if compatibility := manifest.get('goCompatibilityOverlay'):
+        if compatibility['source'] != 'src/crypto/internal/fips140/drbg/entropy_fips140.go' or compatibility['replacement'] != 'go-compat/entropy_fips140.go':
+            raise ValueError('Unsupported Go compatibility replacement')
+        goroot = Path(subprocess.check_output([str(go), 'env', 'GOROOT'], text=True, env=env).strip())
+        original = goroot/compatibility['source']
+        if hashlib.sha256(original.read_bytes()).hexdigest() != compatibility['originalSHA256']:
+            raise ValueError('Go compatibility source mismatch')
+        overlay = work/'go-overlay.json'
+        overlay.write_text(json.dumps({'Replace': {str(original): str(source/compatibility['replacement'])}}))
+        compatibility_flags = ['-overlay='+str(overlay)]
     for index, (name, directory, extra, ldflags) in enumerate([
         ('routerlite', source/'routerlite', [], '-s -w'),
         ('sing-box', core, ['-tags', 'with_utls'], '-s -w -X github.com/sagernet/sing-box/constant.Version=1.14.2-routerlite')]):
@@ -62,7 +73,7 @@ def verify(source, work, go):
             if gcflags:
                 extra = extra + ['-gcflags='+gcflags]
         with (work/(name+'.log')).open('wb') as log:
-            subprocess.run([str(go), 'build', '-buildvcs=false', '-trimpath', *extra,
+            subprocess.run([str(go), 'build', *compatibility_flags, '-buildvcs=false', '-trimpath', *extra,
                             '-ldflags='+ldflags, '-o', str(target), entrypoint],
                            cwd=directory, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
         digest = hashlib.sha256(target.read_bytes()).hexdigest()

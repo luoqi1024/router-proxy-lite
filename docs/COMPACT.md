@@ -30,7 +30,7 @@ sh /data/routerlite.stage/scripts/setup.sh --root /data/routerlite --memory-prof
 对应源码使用实际的原始二进制生成：
 
 ```powershell
-python tools/source-bundle.py --core dist/routerlite-core-native-small-armv7.raw --module-cache .local/gopath/pkg/mod --rule-inputs .local/rule-inputs --output dist/routerlite-compact-source.tar.gz
+python tools/source-bundle.py --core dist/routerlite-core-native-small-armv7.raw --module-cache .local/gopath/pkg/mod --rule-inputs .local/rule-inputs --go-overlay .local/go-compat/overlay.json --output dist/routerlite-compact-source.tar.gz
 ```
 
 完整硬件测试范围见 [实机清单](HARDWARE-TEST.md)。构建和短时联网成功不等同长期稳定性、满负载或全部客户端应用验证。

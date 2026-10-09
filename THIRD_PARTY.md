@@ -5,7 +5,7 @@ RouterLite original code is GPL-3.0-or-later. Third-party code and data retain t
 ## Programs
 
 - **sing-box 1.14.2** — [upstream source](https://github.com/SagerNet/sing-box/tree/v1.14.2), GPL-3.0-or-later. Copyright (C) 2022 nekohasekai. Its naming/association notice is preserved in `licenses/sing-box.txt`. RouterLite modifies protocol registration using `tools/core-profile.py`; it does not implement its own cryptography. Source archive SHA256: `67dd8f8c37ecaaadcfcafad1f0827eed4b034c963b86fd3aa5c0d7a36876845d`.
-- **Go runtime and standard library** — BSD-style; `licenses/go-runtime.txt`.
+- **Go runtime and standard library** — BSD-style; `licenses/go-runtime.txt`. Low-memory builds use `tools/go-compat-overlay.py` to allocate the FIPS entropy scratch buffer on first use, retaining its full size and algorithm. The corresponding-source archive includes the modified file; see [build provenance](docs/PROVENANCE.md). These builds do not claim FIPS module certification.
 - **Go modules linked into the manager and core** — exact identities and source checksums are recorded in the corresponding-source archive. `licenses/go-dependencies.txt` retains the discovered upstream LICENSE, COPYING and NOTICE texts from all 56 linked modules, including transitive dependencies. Regenerate it when the linked module set changes; see `tools/source-notices.py`.
 - **gopkg.in/yaml.v3 3.0.1** — MIT / Apache-2.0 terms retained from upstream.
 - **UPX 5.2.1** — [upstream](https://github.com/upx/upx); its license includes the compressed-executable exception. Runtime binaries retain their own licenses; the compression tool is not installed on the router.

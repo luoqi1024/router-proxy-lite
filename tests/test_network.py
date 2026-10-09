@@ -73,7 +73,7 @@ class NetworkTransactions(unittest.TestCase):
             path.write_text(MOCK)
             path.chmod(0o755)
         script = (Path(__file__).resolve().parents[1] / 'scripts/network.sh').read_text()
-        script = script.replace('LOCK=/tmp/routerlite-network.lock', f'LOCK={self.root}/lock')
+        script = script.replace('LOCK=/tmp/routerlite-network.flock', f'LOCK={self.root}/lock')
         script = script.replace('[ -c /dev/net/tun ]', '[ -d / ]')
         self.script = self.root / 'network.sh'
         self.script.write_text(script)
@@ -114,6 +114,28 @@ class NetworkTransactions(unittest.TestCase):
         self.assertEqual(self.run_script('start'), 0)
         self.assertNotEqual(self.run_script('stop', 'ip -4 route flush table 3180'), 0)
         self.assertTrue((self.data / 'network.owner').exists())
+        self.assertEqual(self.run_script('stop'), 0)
+        self.assert_clean()
+
+    def test_live_lock_refuses_operation_and_releases_after_owner_is_killed(self):
+        # Real kernel flock, including an inherited descriptor, no real routing.
+        holder = subprocess.Popen(['/bin/sh', '-c',
+            'exec 9>"$1"; flock -n 9; printf ready; exec sleep 30',
+            'sh', str(self.root/'lock')], stdout=subprocess.PIPE)
+        self.addCleanup(lambda: holder.poll() is None and holder.kill())
+        self.assertEqual(holder.stdout.read(5), b'ready')
+        self.assertNotEqual(self.run_script('start'), 0)
+        self.assert_clean()
+        holder.kill()
+        holder.wait(timeout=3)
+        holder.stdout.close()
+        self.assertEqual(self.run_script('start'), 0)
+        self.assertEqual(self.run_script('stop'), 0)
+        self.assert_clean()
+
+    def test_leftover_lock_file_never_blocks_recovery(self):
+        (self.root/'lock').write_text('left over after a killed process')
+        self.assertEqual(self.run_script('start'), 0)
         self.assertEqual(self.run_script('stop'), 0)
         self.assert_clean()
 

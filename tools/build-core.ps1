@@ -22,6 +22,8 @@ if($LASTEXITCODE -ne 0){throw 'Source extraction failed'}
 if($LASTEXITCODE -ne 0){throw 'Core profile failed'}
 $env:CGO_ENABLED='0';$env:GOOS='linux';$env:GOARCH='arm';$env:GOARM='7'
 $env:GOPATH="$root/.local/gopath";$env:GOCACHE="$root/.local/gocache"
+$overlay=& python "$PSScriptRoot/go-compat-overlay.py" --go $go --output "$root/.local/go-compat"
+if($LASTEXITCODE -ne 0){throw 'Go compatibility overlay failed'}
 if($ModuleCache){$env:GOMODCACHE=$ModuleCache}
 $filename='routerlite-core-armv7'
 if($Target -eq 'check-windows'){$env:GOOS='windows';$env:GOARCH='amd64';$filename='routerlite-core-check.exe'}
@@ -34,7 +36,7 @@ Push-Location $source
 try{
     New-Item -ItemType Directory -Force "$root/dist" | Out-Null
     $buildFile="$root/dist/$filename.build-$([guid]::NewGuid().ToString('N'))"
-    & $go build -buildvcs=false -trimpath -tags with_utls @buildFlags "-ldflags=-s -w -X github.com/sagernet/sing-box/constant.Version=$coreVersion" -o $buildFile $entrypoint
+    & $go build "-overlay=$overlay" -buildvcs=false -trimpath -tags with_utls @buildFlags "-ldflags=-s -w -X github.com/sagernet/sing-box/constant.Version=$coreVersion" -o $buildFile $entrypoint
     if($LASTEXITCODE -ne 0){throw 'Core build failed'}
     Copy-Item -LiteralPath $buildFile -Destination "$root/dist/$filename" -Force
     Copy-Item -LiteralPath $buildFile -Destination "$root/dist/$filename.raw" -Force

@@ -32,7 +32,7 @@ RouterLite 面向已解锁 SSH 的原厂固件路由器。安装后，导入订�
 
 目前的实机验证设备是 **小米 AX1800（RM1800），原厂 MiWiFi 1.0.394**。测试保留了原厂固件和分区。
 
-当前安装器面向 ARMv7 Linux，需要 root 权限，以及固件已有的 BusyBox、procd、iptables、TUN 和策略路由能力。LAN 与 WAN 必须独立，LAN 接口为 `br-lan`。**仅能登录 SSH，并不代表设备已经兼容。**
+当前安装器面向 ARMv7 Linux，需要 root 权限，以及固件已有的 BusyBox、procd、iptables、flock、TUN 和策略路由能力。LAN 与 WAN 必须独立，LAN 接口为 `br-lan`。**仅能登录 SSH，并不代表设备已经兼容。**
 
 | 资源 | 当前要求 |
 | --- | --- |
