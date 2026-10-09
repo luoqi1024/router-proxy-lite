@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -93,6 +94,7 @@ func (d *RouterDriver) launchLocked(ctx context.Context, s State) error {
 	cmd := exec.Command(d.Core, "run", "-c", path)
 	configureChild(cmd)
 	cmd.Env = coreRuntimeEnv(false)
+	releaseCoreHeadroom()
 	// Provider messages can include server addresses. Never expose raw core output in the UI.
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
@@ -189,6 +191,7 @@ func (d *RouterDriver) Apply(ctx context.Context, s State) error {
 		defer cancel()
 		cmd := exec.CommandContext(cctx, d.Core, "check", "-c", tmp)
 		cmd.Env = coreRuntimeEnv(true)
+		releaseCoreHeadroom()
 		if err := cmd.Run(); err != nil {
 			return errors.New("内核配置检查失败")
 		}
@@ -214,6 +217,15 @@ func (d *RouterDriver) Apply(ctx context.Context, s State) error {
 }
 func (d *RouterDriver) Running() bool { d.mu.Lock(); defer d.mu.Unlock(); return d.current != nil }
 func (d *RouterDriver) Close() error  { d.mu.Lock(); defer d.mu.Unlock(); return d.stopLocked() }
+
+// Release transient API/configuration allocations before starting another Go
+// runtime. The compact profile cannot afford to retain idle heap pages during
+// the core's startup peak; its GOMEMLIMIT is a soft target, not an RSS limit.
+func releaseCoreHeadroom() {
+	if os.Getenv("RPL_MEMORY_PROFILE") == "compact" {
+		debug.FreeOSMemory()
+	}
+}
 
 func coreRuntimeEnv(check bool) []string {
 	gc, limit, procs := "50", "32MiB", "2"
